@@ -8,7 +8,6 @@ use log::{debug, error, info, warn};
 use crate::process::{Process, iter_processes, StopProcessError};
 use crate::config::{Config, FilledInstanceConfig};
 use crate::{InstallConfig};
-use crate::ports::{TcpPortTable, UdpPortTable};
 use crate::arg_builder::ArgBuilder;
 use serde::{Serialize, Deserialize};
 
@@ -48,7 +47,7 @@ pub struct Server {
 
 impl Server {
     fn stop(&mut self) {
-        if let ServerState::Running { process, .. } = &self.state {
+        if let ServerState::Running(RunningServer { process, .. }) = &self.state {
             match process.stop() {
                 Ok(_) => debug!("Stopped {} server process {}", self.name, process.id),
                 Err(StopProcessError::TerminateFailed) => warn!("Could not stop {} server process {}", self.name, process.id),
@@ -61,15 +60,21 @@ impl Server {
 
 pub enum ServerState {
     NotRunning,
-    Running {
-        process: Process,
-    },
+    Running(RunningServer),
+}
+
+pub struct RunningServer {
+    pub process: Process,
+    pub auth_port: u16,
+    pub game_port: u16,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct SerializedServer {
     pub name: String,
     pub pid: u32,
+    pub auth_port: u16,
+    pub game_port: u16,
 }
 
 pub struct ServerCluster {
@@ -127,7 +132,7 @@ impl ServerCluster {
             // If the server is currently marked as running, check if the process exists and has the
             // correct name
             let server = &mut self.servers[server_index];
-            if let ServerState::Running { process, .. } = &server.state {
+            if let ServerState::Running(RunningServer { process, .. }) = &server.state {
                 if !process.is_running() {
                     warn!("Server {} appears to have stopped (process {} is no longer running)", server.name, process.id);
                     server.state = ServerState::NotRunning;
@@ -139,7 +144,7 @@ impl ServerCluster {
                 did_start_anything = true;
                 let start_res = self.start_server(&server.name, &server.config, config, install_config);
                 match start_res {
-                    Ok(process) => self.servers[server_index].state = ServerState::Running { process },
+                    Ok(running_server) => self.servers[server_index].state = ServerState::Running(running_server),
                     Err(why) => {
                         error!("Could not start {}: {}", server.name, why);
                     }
@@ -169,39 +174,43 @@ impl ServerCluster {
         self.servers
             .iter()
             .filter_map(|server| match &server.state {
-                ServerState::Running { process, .. } => Some(SerializedServer {
+                ServerState::Running(RunningServer { process, auth_port, game_port, .. }) => Some(SerializedServer {
                     name: server.name.clone(),
                     pid: process.id,
+                    auth_port: *auth_port,
+                    game_port: *game_port,
                 }),
                 _ => None,
             })
             .collect()
     }
 
-    fn start_server(&self, name: &str, instance_config: &FilledInstanceConfig, config: &Config, install_config: &InstallConfig) -> Result<Process, Box<dyn Error>> {
-        let tcp_ports_in_use: HashSet<_> = TcpPortTable::new()?.iter().collect();
-        let udp_ports_in_use: HashSet<_> = UdpPortTable::new()?.iter().collect();
+    fn start_server(&self, name: &str, instance_config: &FilledInstanceConfig, config: &Config, install_config: &InstallConfig) -> Result<RunningServer, Box<dyn Error>> {
+        let (auth_ports_in_use, game_ports_in_use): (HashSet<_>, HashSet<_>) = self.servers.iter().filter_map(|server| match &server.state {
+            ServerState::NotRunning => None,
+            ServerState::Running(RunningServer { auth_port, game_port, .. }) => Some((*auth_port, *game_port))
+        }).unzip();
 
         let auth_port = match instance_config.auth_port {
-            Some(port) if !tcp_ports_in_use.contains(&port) => port,
+            Some(port) if !auth_ports_in_use.contains(&port) => port,
             Some(used_port) => return Err(Box::new(StartInstanceError::SpecificAuthPortInUse(used_port))),
             None => {
                 config.auth_ports
                     .clone()
                     .into_iter()
-                    .find(|port| !tcp_ports_in_use.contains(port))
+                    .find(|port| !auth_ports_in_use.contains(port))
                     .ok_or(Box::new(StartInstanceError::NoAuthPortsAvailable(config.auth_ports.clone())))?
             }
         };
 
         let game_port = match instance_config.game_port {
-            Some(port) if !udp_ports_in_use.contains(&port) => port,
+            Some(port) if !game_ports_in_use.contains(&port) => port,
             Some(used_port) => return Err(Box::new(StartInstanceError::SpecificGamePortInUse(used_port))),
             None => {
                 config.game_ports
                     .clone()
                     .into_iter()
-                    .find(|port| !udp_ports_in_use.contains(port))
+                    .find(|port| !game_ports_in_use.contains(port))
                     .ok_or(Box::new(StartInstanceError::NoGamePortsAvailable(config.game_ports.clone())))?
             }
         };
@@ -259,16 +268,15 @@ impl ServerCluster {
                         return Err(Box::new(StartInstanceError::ProcessCrashedWhileStarting));
                     }
 
-                    let tcp_port_table = TcpPortTable::new()?;
-                    let is_auth_initializing = !tcp_port_table.iter().any(|port| port == auth_port);
-                    let udp_port_table = UdpPortTable::new()?;
-                    let is_game_initializing = !udp_port_table.iter().any(|port| port == game_port);
-
-                    if is_auth_initializing || is_game_initializing {
+                    if portpicker::is_free_tcp(auth_port) {
                         debug!("Waiting for server to be ready...");
                     } else {
                         info!("Server {} is ready!", name);
-                        return Ok(process);
+                        return Ok(RunningServer {
+                            process,
+                            auth_port,
+                            game_port,
+                        });
                     }
                 }
             }

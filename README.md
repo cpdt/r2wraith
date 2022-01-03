@@ -197,36 +197,45 @@ all servers.
  - Default: not set (Northstar defaults to `"mp_forwardbase_kodai"`)
  - Example: `default-map = "mp_forwardbase_kodai"`
 
-#### `epilogue-enabled`
+#### `riffs`
 
- - Allows enabling or disabling the epilogue in supported gamemodes. Historically this has been a common source of
-   crashes so it's disabled by default. Sets the `run_epilogue` playlist var.
- - Default: `false`
- - Example: `epilogue-enabled = true`
+ - A list of riffs (optional gamemode modifications) to enable.
+ - Possible values: `"floor-is-lava"`, `"all-holopilot"`, `"all-grapple"`, `"all-phase"`, `"all-ticks"`, `"tactikill"`,
+   `"amped-tacticals"`, `"rocket-arena"`, `"shotguns-snipers"`, `"iron-rules"`, `"first-person-embark"`, `"instagib"`
+ - Default: `[]`
+ - Example: `riffs = [ "floor-is-lava", "shotguns-snipers" ]`
 
-#### `custom-air-accel`
+#### Playlist overrides
 
- - Custom air acceleration factor in gamemodes that support it. Sets the `custom_air_accel_pilot` playlist var.
- - Default: not set
- - Example: `custom-air-accel = 5000`
+The following playlist overrides can be set. Use `extra-playlist-vars` to set any that aren't supported.
 
-#### `boosts-enabled`
-
- - Enables or disables using boosts in gamemodes that support it. Sets the `boosts_enabled` playlist var.
- - Default: not set
- - Example: `boosts-enabled = false`
-
-#### `score-limit`
-
- - Sets a custom score limit in gamemodes that support it. Sets the `scorelimit` playlist var.
- - Default: not set
- - Example: `scorelimit = 900`
-
-#### `time-limit-minutes`
-
- - Sets a custom time limit in gamemodes that support it. Sets the `timelimit` playlist var.
- - Default: not set
- - Example: `timelimit = 60`
+ - `match-classic-mp-enabled` - `true`/`false`
+ - `match-epilogue-enabled` - `true`/`false`
+ - `match-scorelimit` - number
+ - `match-round-scorelimit` - number
+ - `match-timelimit` - number
+ - `match-round-timelimit` - number
+ - `match-oob-timer-enabled` - `true`/`false`
+ - `titan-boost-meter-multiplier` - number
+ - `titan-aegis-upgrades-enabled` - `true`/`false`
+ - `titan-infinite-doomed-state-enabled` - `true`/`false`
+ - `titan-shield-regen-enabled` - `true`/`false`
+ - `titan-classic-rodeo-enabled` - `true`/`false`
+ - `pilot-bleedout-mode` - `"default"`/`"disabled"`/`"enabled"`
+ - `pilot-bleedout-holster-when-down` - `true`/`false`
+ - `pilot-bleedout-die-on-team-bleedout` - `true`/`false`
+ - `pilot-bleedout-bleedout-time` - number
+ - `pilot-bleedout-firstaid-time` - number
+ - `pilot-bleedout-selfres-time` - number
+ - `pilot-bleedout-firstaid-heal-percent` - number
+ - `pilot-bleedout-down-ai-miss-chance` - number
+ - `promode-weapons-enabled` - `true`/`false`
+ - `pilot-health-multiplier` - number
+ - `pilot-respawn-delay` - number
+ - `pilot-boosts-enabled` - `true`/`false`
+ - `pilot-boost-meter-overdrive` - `"enabled"`/`"disabled"`/`"only"`
+ - `pilot-boost-meter-multiplier` - number
+ - `pilot-air-acceleration` - number
 
 #### `extra-playlist-vars`
 

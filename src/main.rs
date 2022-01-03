@@ -7,11 +7,10 @@ use log::{debug, info, warn, error};
 use crate::arg_builder::KNOWN_VARS;
 use crate::config::Config;
 use crate::process::Process;
-use crate::server_cluster::{SerializedServer, Server, ServerCluster, ServerState};
+use crate::server_cluster::{RunningServer, SerializedServer, Server, ServerCluster, ServerState};
 
 mod arg_builder;
 mod config;
-mod ports;
 mod process;
 mod server_cluster;
 
@@ -139,7 +138,11 @@ fn main() {
         }
 
         debug!("Restored {} with process {}", matching_server.name, process.id);
-        matching_server.state = ServerState::Running { process };
+        matching_server.state = ServerState::Running(RunningServer {
+            process,
+            auth_port: serialized_server.auth_port,
+            game_port: serialized_server.game_port,
+        });
     }
 
     let server_thread = std::thread::spawn(move || {
