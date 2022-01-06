@@ -5,6 +5,7 @@ use std::ops::RangeInclusive;
 use std::time::Duration;
 use log::{debug, error, info, warn};
 use shiplift::{Container, ContainerOptions, Docker};
+use serde::{Serialize, Deserialize};
 use crate::Config;
 use crate::arg_builder::ArgBuilder;
 use crate::config::FilledInstanceConfig;
@@ -44,7 +45,7 @@ pub struct RunningServer {
 }
 
 impl RunningServer {
-    pub fn container(&self, docker: &Docker) -> Container {
+    pub fn container<'docker>(&self, docker: &'docker Docker) -> Container<'docker> {
         docker.containers().get(&self.container_id)
     }
 }
@@ -61,6 +62,7 @@ pub struct Server {
     pub is_old: bool,
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct SerializedServer {
     pub name: String,
     pub container_id: String,
@@ -184,7 +186,7 @@ impl ServerCluster {
             };
 
             let container = docker.containers().get(serialized_server.container_id);
-            if !is_container_running(&container) {
+            if !is_container_running(&container).await {
                 warn!("Server {} doesn't appear to be running anymore", serialized_server.name);
                 continue;
             }
@@ -204,7 +206,7 @@ impl ServerCluster {
             // If the server is currently marked as running, check if the container is still running
             let server = &mut self.servers[server_index];
             if let ServerState::Running(running_server) = &server.state {
-                if !is_container_running(&running_server.container(docker)) {
+                if !is_container_running(&running_server.container(docker)).await {
                     warn!("Server {} appears to have stopped (container {} is no longer running)", server.name, running_server.container_id);
                     server.state = ServerState::NotRunning;
                 }
@@ -289,7 +291,7 @@ impl ServerCluster {
             tokio::time::sleep(Duration::from_secs(5)).await;
 
             // Ensure the container is still running so we don't get stuck in an infinite loop
-            if !is_container_running(&container) {
+            if !is_container_running(&container).await {
                 return Err(Box::new(StartServerError::ProcessCrashedWhileStarting));
             }
 
@@ -306,6 +308,6 @@ impl ServerCluster {
     }
 }
 
-async fn is_container_running(container: &'_ Container) -> bool {
+async fn is_container_running(container: &Container<'_>) -> bool {
     container.inspect().await.map(|details| details.state.running).unwrap_or(false)
 }

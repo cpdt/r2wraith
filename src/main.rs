@@ -62,7 +62,7 @@ async fn main() {
     config.game_dir = full_config_path
         .join(config.game_dir)
         .to_string_lossy()
-        .into_string();
+        .to_string();
 
     let restore_serialized_servers = match load_serialized_servers(&restore_file_path) {
         Ok(servers) => {
@@ -100,7 +100,7 @@ async fn main() {
                     match command {
                         Some(ReplCommand::StopAll) => {
                             debug!("Stopping all servers...");
-                            server_cluster.stop_all().await;
+                            server_cluster.stop_all(&docker).await;
                             break;
                         }
                         Some(ReplCommand::StopWraith) => {
@@ -111,23 +111,23 @@ async fn main() {
                             break;
                         }
                         Some(ReplCommand::SetServers(servers)) => {
-                            server_cluster.load_servers(servers).await;
+                            server_cluster.load_servers(servers);
                             info!("Finished reloading config");
                         }
                         Some(ReplCommand::StopOld) => {
-                            server_cluster.stop_old().await;
+                            server_cluster.stop_old(&docker).await;
                         }
                         Some(ReplCommand::RestartAll) => {
-                            server_cluster.stop_all().await;
+                            server_cluster.stop_all(&docker).await;
                         }
                         Some(ReplCommand::Restart(server_name)) => {
                             match server_cluster.get_mut(&server_name) {
-                                Some(server) => server.stop().await,
+                                Some(server) => server.stop(&docker).await,
                                 None => info!("Unknown server {}", server_name),
                             }
                         }
                         None => break,
-                    }
+                    };
                 }
                 _ = wait_timeout => {}
             }
@@ -199,7 +199,7 @@ fn load_serialized_servers(restore_path: &Path) -> Result<Vec<SerializedServer>,
 }
 
 fn store_serialized_servers(restore_path: &Path, server_cluster: &ServerCluster) -> Result<(), Box<dyn Error>> {
-    let serialized_servers = serde_json::to_string(&server_cluster.serialize_all())?;
+    let serialized_servers = serde_json::to_string(&server_cluster.serialize())?;
     std::fs::write(&restore_path, serialized_servers)?;
     Ok(())
 }
