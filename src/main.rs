@@ -2,7 +2,7 @@ use std::error::Error;
 use std::path::Path;
 use std::time::Duration;
 use bollard::Docker;
-use log::{debug, error, info, LevelFilter, warn};
+use log::{debug, error, info, warn};
 use tokio::sync::mpsc::unbounded_channel;
 use crate::config::Config;
 use crate::server_cluster::{PollStatus, SerializedServer, Server, ServerCluster};
@@ -25,8 +25,8 @@ enum ReplCommand {
 async fn main() {
     simple_logger::SimpleLogger::new()
         .with_utc_timestamps()
-        .with_level(LevelFilter::Off)
-        .with_module_level("r2wraith", LevelFilter::Debug)
+        //.with_level(LevelFilter::Off)
+        //.with_module_level("r2wraith", LevelFilter::Debug)
         .init()
         .unwrap();
 
