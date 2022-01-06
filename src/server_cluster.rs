@@ -1,13 +1,15 @@
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::fmt::{Display, Formatter};
+use std::net::{Ipv4Addr, SocketAddrV4};
 use std::ops::RangeInclusive;
 use std::time::Duration;
 use bollard::container::{CreateContainerOptions};
 use bollard::Docker;
-use bollard::models::{HostConfig, PortBinding};
+use bollard::models::{ContainerInspectResponse, ContainerState, HostConfig, PortBinding};
 use log::{debug, error, info, warn};
 use serde::{Serialize, Deserialize};
+use tokio::net::TcpStream;
 use crate::Config;
 use crate::arg_builder::ArgBuilder;
 use crate::config::FilledInstanceConfig;
@@ -18,7 +20,8 @@ enum StartServerError {
     NoAuthPortsAvailable(RangeInclusive<u16>),
     SpecificGamePortInUse(u16),
     NoGamePortsAvailable(RangeInclusive<u16>),
-    ProcessCrashedWhileStarting,
+    ContainerCrashedWhileStarting,
+    ContainerHasNoIp,
 }
 
 impl Display for StartServerError {
@@ -28,7 +31,8 @@ impl Display for StartServerError {
             StartServerError::NoAuthPortsAvailable(ports) => write!(f, "No auth ports between {} and {} are free", ports.start(), ports.end()),
             StartServerError::SpecificGamePortInUse(port) => write!(f, "Specified game port {} is not free", port),
             StartServerError::NoGamePortsAvailable(ports) => write!(f, "No game ports between {} and {} are free", ports.start(), ports.end()),
-            StartServerError::ProcessCrashedWhileStarting => write!(f, "The container crashed while initializing"),
+            StartServerError::ContainerCrashedWhileStarting => write!(f, "The container crashed while initializing"),
+            StartServerError::ContainerHasNoIp => write!(f, "The container was not assigned an IP address"),
         }
     }
 }
@@ -192,15 +196,50 @@ impl ServerCluster {
 
     pub async fn poll(&mut self, config: &Config, docker: &Docker) -> PollStatus {
         let mut status = PollStatus::NoWork;
-        for server_index in 0..self.servers.len() {
-            // If the server is currently marked as running, check if the container is still running
-            let server = &mut self.servers[server_index];
-            if let ServerState::Running(running_server) = &server.state {
-                if !is_container_running(&running_server.container_id, docker).await {
+        let restart_servers_futures = self.servers.iter().enumerate().map(|(server_index, server)| async move {
+            let running_server = match &server.state {
+                ServerState::Running(running_server) => running_server,
+                _ => return None,
+            };
+
+            let details = match docker.inspect_container(&running_server.container_id, None).await.ok() {
+                None | Some(ContainerInspectResponse { state: None | Some(ContainerState { running: None | Some(false), .. }), .. }) => {
                     warn!("Server {} appears to have stopped (container {} is no longer running)", server.name, running_server.container_id);
-                    server.state = ServerState::NotRunning;
+                    return Some(server_index);
+                }
+                Some(details) => details,
+            };
+            let container_ip = match get_container_ip_address(&details).and_then(|address| address.parse::<Ipv4Addr>().ok()) {
+                Some(ip) => ip,
+                None => {
+                    warn!("Failed to get local IP address of {}, not doing port check", server.name);
+                    return None;
+                }
+            };
+
+            if let Err(why) = TcpStream::connect(SocketAddrV4::new(container_ip, running_server.auth_port)).await {
+                warn!("Server {} appears to have stopped (can't connect to auth server: {})", server.name, why);
+                return Some(server_index);
+            }
+
+            return None;
+        });
+
+        let restart_servers = futures::future::join_all(restart_servers_futures)
+            .await
+            .into_iter()
+            .filter_map(|server| server);
+        for server_index in restart_servers {
+            let server = &mut self.servers[server_index];
+
+            // Be extra sure that the container is stopped
+            if let ServerState::Running(running_server) = &server.state {
+                match docker.stop_container(&running_server.container_id, None).await {
+                    Ok(()) => debug!("Stopped container {}", running_server.container_id),
+                    Err(why) => warn!("Failed to stop container {}: {}", running_server.container_id, why),
                 }
             }
+            server.state = ServerState::NotRunning;
 
             let server = &self.servers[server_index];
             if let ServerState::NotRunning = server.state {
@@ -212,6 +251,7 @@ impl ServerCluster {
                 }
             }
         }
+
         status
     }
 
@@ -299,6 +339,16 @@ impl ServerCluster {
         let container_id = create_response.id;
         docker.start_container::<String>(&container_id, None).await?;
 
+        let inspect_response = docker.inspect_container(&container_id, None)
+            .await
+            .ok();
+        let container_ip = inspect_response
+            .as_ref()
+            .and_then(get_container_ip_address)
+            .and_then(|ip| ip.parse::<Ipv4Addr>().ok())
+            .ok_or(StartServerError::ContainerHasNoIp)?;
+        let container_auth_address = SocketAddrV4::new(container_ip, auth_port);
+
         info!("Server {} has started with container {}", name, container_id);
 
         // Wait for the auth server to start on the required port
@@ -308,10 +358,10 @@ impl ServerCluster {
 
             // Ensure the container is still running so we don't get stuck in an infinite loop
             if !is_container_running(&container_id, docker).await {
-                return Err(Box::new(StartServerError::ProcessCrashedWhileStarting));
+                return Err(Box::new(StartServerError::ContainerCrashedWhileStarting));
             }
 
-            if !portpicker::is_free_tcp(auth_port) {
+            if let Ok(_) = TcpStream::connect(container_auth_address).await {
                 break;
             }
         }
@@ -331,4 +381,11 @@ async fn is_container_running(container_id: &str, docker: &Docker) -> bool {
         .and_then(|details| details.state)
         .and_then(|state| state.running)
         .unwrap_or(false)
+}
+
+fn get_container_ip_address(details: &ContainerInspectResponse) -> Option<&str> {
+    let network_settings = details.network_settings.as_ref()?;
+    let networks = network_settings.networks.as_ref()?;
+    let first_network = networks.iter().next()?.1;
+    Some(first_network.ip_address.as_ref()?)
 }
