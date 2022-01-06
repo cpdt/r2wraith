@@ -3,8 +3,9 @@ use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::ops::RangeInclusive;
 use std::time::Duration;
+use bollard::Docker;
+use bollard::models::{HostConfig, PortBinding};
 use log::{debug, error, info, warn};
-use shiplift::{Container, ContainerOptions, Docker};
 use serde::{Serialize, Deserialize};
 use crate::Config;
 use crate::arg_builder::ArgBuilder;
@@ -43,12 +44,6 @@ pub struct RunningServer {
     container_id: String,
     auth_port: u16,
     game_port: u16,
-}
-
-impl RunningServer {
-    pub fn container<'docker>(&self, docker: &'docker Docker) -> Container<'docker> {
-        docker.containers().get(&self.container_id)
-    }
 }
 
 #[derive(Debug)]
@@ -90,7 +85,7 @@ impl Server {
 
     pub async fn stop(&mut self, docker: &Docker) {
         if let ServerState::Running(running_server) = &self.state {
-            match running_server.container(docker).stop(None).await {
+            match docker.stop_container(&running_server.container_id, None).await {
                 Ok(()) => info!("Stopped {}", self.name),
                 Err(why) => {
                     error!("Failed to stop {}: {}", self.name, why);
@@ -180,15 +175,14 @@ impl ServerCluster {
                 }
             };
 
-            let container = docker.containers().get(serialized_server.container_id);
-            if !is_container_running(&container).await {
+            if !is_container_running(&serialized_server.container_id, docker).await {
                 warn!("Server {} doesn't appear to be running anymore", serialized_server.name);
                 continue;
             }
 
-            debug!("Restored {} with container {}", matching_server.name, container.id());
+            debug!("Restored {} with container {}", matching_server.name, serialized_server.container_id);
             matching_server.state = ServerState::Running(RunningServer {
-                container_id: container.id().to_string(),
+                container_id: serialized_server.container_id.clone(),
                 auth_port: serialized_server.auth_port,
                 game_port: serialized_server.game_port,
             });
@@ -201,7 +195,7 @@ impl ServerCluster {
             // If the server is currently marked as running, check if the container is still running
             let server = &mut self.servers[server_index];
             if let ServerState::Running(running_server) = &server.state {
-                if !is_container_running(&running_server.container(docker)).await {
+                if !is_container_running(&running_server.container_id, docker).await {
                     warn!("Server {} appears to have stopped (container {} is no longer running)", server.name, running_server.container_id);
                     server.state = ServerState::NotRunning;
                 }
@@ -264,22 +258,40 @@ impl ServerCluster {
             debug!("  {}", env_var);
         }
 
-        let info = docker
-            .containers()
-            .create(
-                &ContainerOptions::builder(&config.docker_image)
-                    .volumes(vec![&format!("{}:/mnt/titanfall", config.game_dir)])
-                    .expose(auth_port as u32, "tcp", auth_port as u32)
-                    .expose(game_port as u32, "udp", game_port as u32)
-                    .env(&env_vars)
-                    .attach_stdout(true)
-                    .attach_stderr(true)
-                    .auto_remove(true)
-                    .build()
-            )
+        let container_config = bollard::container::Config {
+            image: Some(config.docker_image.clone()),
+            attach_stdout: Some(true),
+            attach_stderr: Some(true),
+            env: Some(env_vars),
+            host_config: Some(HostConfig {
+                binds: Some(vec![format!("{}:/mnt/titanfall:ro", config.game_dir)]),
+                port_bindings: Some([
+                    (format!("{}/tcp", auth_port), Some(vec![PortBinding {
+                        host_ip: None,
+                        host_port: Some(auth_port.to_string()),
+                    }])),
+                    (format!("{}/udp", game_port), Some(vec![PortBinding {
+                        host_ip: None,
+                        host_port: Some(game_port.to_string()),
+                    }])),
+                ].into_iter().collect()),
+                auto_remove: Some(true),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let create_response = docker
+            .create_container::<String, String>(None, container_config)
             .await?;
-        let container = docker.containers().get(&info.id);
-        info!("Server {} has started with container {}", name, container.id());
+        if !create_response.warnings.is_empty() {
+            for warning in &create_response.warnings {
+                warn!("{}", warning);
+            }
+        }
+
+        let container_id = create_response.id;
+        docker.start_container::<String>(&container_id, None).await?;
+        info!("Server {} has started with container {}", name, container_id);
 
         // Wait for the auth server to start on the required port
         loop {
@@ -287,7 +299,7 @@ impl ServerCluster {
             tokio::time::sleep(Duration::from_secs(5)).await;
 
             // Ensure the container is still running so we don't get stuck in an infinite loop
-            if !is_container_running(&container).await {
+            if !is_container_running(&container_id, docker).await {
                 return Err(Box::new(StartServerError::ProcessCrashedWhileStarting));
             }
 
@@ -297,13 +309,18 @@ impl ServerCluster {
         }
 
         Ok(RunningServer {
-            container_id: container.id().to_string(),
+            container_id,
             auth_port,
             game_port,
         })
     }
 }
 
-async fn is_container_running(container: &Container<'_>) -> bool {
-    container.inspect().await.map(|details| details.state.running).unwrap_or(false)
+async fn is_container_running(container_id: &str, docker: &Docker) -> bool {
+    docker.inspect_container(container_id, None)
+        .await
+        .ok()
+        .and_then(|details| details.state)
+        .and_then(|state| state.running)
+        .unwrap_or(false)
 }

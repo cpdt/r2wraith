@@ -1,8 +1,8 @@
 use std::error::Error;
 use std::path::Path;
 use std::time::Duration;
+use bollard::Docker;
 use log::{debug, error, info, LevelFilter, warn};
-use shiplift::Docker;
 use tokio::sync::mpsc::unbounded_channel;
 use crate::config::Config;
 use crate::server_cluster::{PollStatus, SerializedServer, Server, ServerCluster};
@@ -25,7 +25,8 @@ enum ReplCommand {
 async fn main() {
     simple_logger::SimpleLogger::new()
         .with_utc_timestamps()
-        .with_level(LevelFilter::Debug)
+        .with_level(LevelFilter::Off)
+        .with_module_level("r2wraith", LevelFilter::Debug)
         .init()
         .unwrap();
 
@@ -43,13 +44,21 @@ async fn main() {
 
     info!("R2Wraith {}", env!("CARGO_PKG_VERSION"));
 
-    match Docker::new().version().await {
-        Ok(version) => info!("Docker {}", version.version),
+    let docker = match Docker::connect_with_local_defaults() {
+        Ok(docker) => docker,
         Err(why) => {
-            error!("Failed to connect to Docker: {}", why);
+            error!("Failed to connect to Docker daemon: {}", why);
             std::process::exit(1);
         }
-    }
+    };
+    let docker_version = match docker.version().await {
+        Ok(version) => version.version.unwrap(),
+        Err(why) => {
+            error!("Failed to connect to Docker daemon: {}", why);
+            std::process::exit(1);
+        }
+    };
+    info!("Docker {}", docker_version);
 
     let full_config_path = std::env::current_dir().unwrap().join(&config_file_path);
     let restore_file_path = std::env::current_dir().unwrap().join(&format!("{}.restore.json", config_file_path));
@@ -83,7 +92,6 @@ async fn main() {
         }
     };
 
-    let docker = Docker::new();
     let mut server_cluster = ServerCluster::new();
     server_cluster.load_servers(get_server_list_from_config(&config));
     server_cluster.deserialize(restore_serialized_servers, &docker).await;
@@ -94,7 +102,6 @@ async fn main() {
     let (repl_sender, mut repl_receiver) = unbounded_channel::<ReplCommand>();
 
     let server_join_handle = tokio::spawn(async move {
-        let docker = docker;
         loop {
             let receive_command = repl_receiver.recv();
             let wait_timeout = tokio::time::sleep(Duration::from_secs_f64(config.poll_seconds));
