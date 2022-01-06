@@ -5,7 +5,7 @@ use std::ops::RangeInclusive;
 use std::time::Duration;
 use log::{debug, error, info, warn};
 use shiplift::{Container, ContainerOptions, Docker};
-use crate::{Config, InstallConfig};
+use crate::Config;
 use crate::arg_builder::ArgBuilder;
 use crate::config::FilledInstanceConfig;
 
@@ -21,11 +21,11 @@ enum StartServerError {
 impl Display for StartServerError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            StartInstanceError::SpecificAuthPortInUse(port) => write!(f, "Specified auth port {} is not free", port),
-            StartInstanceError::NoAuthPortsAvailable(ports) => write!(f, "No auth ports between {} and {} are free", ports.start(), ports.end()),
-            StartInstanceError::SpecificGamePortInUse(port) => write!(f, "Specified game port {} is not free", port),
-            StartInstanceError::NoGamePortsAvailable(ports) => write!(f, "No game ports between {} and {} are free", ports.start(), ports.end()),
-            StartInstanceError::ProcessCrashedWhileStarting => write!(f, "The process crashed while initializing"),
+            StartServerError::SpecificAuthPortInUse(port) => write!(f, "Specified auth port {} is not free", port),
+            StartServerError::NoAuthPortsAvailable(ports) => write!(f, "No auth ports between {} and {} are free", ports.start(), ports.end()),
+            StartServerError::SpecificGamePortInUse(port) => write!(f, "Specified game port {} is not free", port),
+            StartServerError::NoGamePortsAvailable(ports) => write!(f, "No game ports between {} and {} are free", ports.start(), ports.end()),
+            StartServerError::ProcessCrashedWhileStarting => write!(f, "The process crashed while initializing"),
         }
     }
 }
@@ -37,21 +37,27 @@ pub enum PollStatus {
     NoWork,
 }
 
-pub struct RunningServer<'docker> {
-    container: Container<'docker>,
+pub struct RunningServer {
+    container_id: String,
     auth_port: u16,
     game_port: u16,
 }
 
-pub enum ServerState<'docker> {
-    NotRunning,
-    Running(RunningServer<'docker>),
+impl RunningServer {
+    pub fn container(&self, docker: &Docker) -> Container {
+        docker.containers().get(&self.container_id)
+    }
 }
 
-pub struct Server<'docker> {
+pub enum ServerState {
+    NotRunning,
+    Running(RunningServer),
+}
+
+pub struct Server {
     pub name: String,
     pub config: FilledInstanceConfig,
-    pub state: ServerState<'docker>,
+    pub state: ServerState,
     pub is_old: bool,
 }
 
@@ -63,11 +69,11 @@ pub struct SerializedServer {
 }
 
 #[derive(Default)]
-pub struct ServerCluster<'docker> {
-    servers: Vec<Server<'docker>>,
+pub struct ServerCluster {
+    servers: Vec<Server>,
 }
 
-impl<'docker> Server<'docker> {
+impl Server {
     pub fn new(name: String, config: FilledInstanceConfig) -> Self {
         Server {
             name,
@@ -77,9 +83,9 @@ impl<'docker> Server<'docker> {
         }
     }
 
-    pub async fn stop(&mut self) -> shiplift::Result<()> {
-        if let ServerState::Running(RunningServer { container, .. }) = &self.state {
-            container.stop(None).await?;
+    pub async fn stop(&mut self, docker: &Docker) -> shiplift::Result<()> {
+        if let ServerState::Running(running_server) = &self.state {
+            running_server.container(docker).stop(None).await?;
             info!("Stopped {}", self.name);
         }
         self.state = ServerState::NotRunning;
@@ -87,7 +93,7 @@ impl<'docker> Server<'docker> {
     }
 }
 
-impl<'docker> ServerCluster<'docker> {
+impl ServerCluster {
     pub fn new() -> Self {
         Self::default()
     }
@@ -136,19 +142,19 @@ impl<'docker> ServerCluster<'docker> {
         }
     }
 
-    pub async fn stop_old(&mut self) {
+    pub async fn stop_old(&mut self, docker: &Docker) {
         for server in &mut self.servers {
             if server.is_old {
-                server.stop().await;
+                server.stop(docker).await;
             }
         }
 
         self.servers.retain(|server| !server.is_old);
     }
 
-    pub async fn stop_all(&mut self) {
+    pub async fn stop_all(&mut self, docker: &Docker) {
         for server in &mut self.servers {
-            server.stop().await;
+            server.stop(docker).await;
         }
     }
 
@@ -156,9 +162,9 @@ impl<'docker> ServerCluster<'docker> {
         self.servers
             .iter()
             .filter_map(|server| match &server.state {
-                ServerState::Running(RunningServer { container, auth_port, game_port }) => Some(SerializedServer {
+                ServerState::Running(RunningServer { container_id, auth_port, game_port }) => Some(SerializedServer {
                     name: server.name.clone(),
-                    container_id: container.id().to_string(),
+                    container_id: container_id.to_string(),
                     auth_port: *auth_port,
                     game_port: *game_port,
                 }),
@@ -167,7 +173,7 @@ impl<'docker> ServerCluster<'docker> {
             .collect()
     }
 
-    pub async fn deserialize(&mut self, serialized_servers: Vec<SerializedServer>, docker: &'docker Docker) {
+    pub async fn deserialize(&mut self, serialized_servers: Vec<SerializedServer>, docker: &Docker) {
         for serialized_server in serialized_servers {
             let matching_server = match self.get_mut(&serialized_server.name) {
                 Some(server) => server,
@@ -185,20 +191,20 @@ impl<'docker> ServerCluster<'docker> {
 
             debug!("Restored {} with container {}", matching_server.name, container.id());
             matching_server.state = ServerState::Running(RunningServer {
-                container,
+                container_id: container.id().to_string(),
                 auth_port: serialized_server.auth_port,
                 game_port: serialized_server.game_port,
             });
         }
     }
 
-    pub async fn poll(&mut self, config: &Config, docker: &'docker Docker) -> PollStatus {
+    pub async fn poll(&mut self, config: &Config, docker: &Docker) -> PollStatus {
         let mut status = PollStatus::NoWork;
         for server_index in 0..self.servers.len() {
             // If the server is currently marked as running, check if the container is still running
             let server = &mut self.servers[server_index];
-            if let ServerState::Running(RunningServer { container, .. }) = &server.state {
-                if !is_container_running(container) {
+            if let ServerState::Running(running_server) = &server.state {
+                if !is_container_running(&running_server.container(docker)) {
                     warn!("Server {} appears to have stopped (container {} is no longer running)", server.name, container.id());
                     server.state = ServerState::NotRunning;
                 }
@@ -207,7 +213,7 @@ impl<'docker> ServerCluster<'docker> {
             let server = &self.servers[server_index];
             if let ServerState::NotRunning = server.state {
                 status = PollStatus::DidWork;
-                let start_res = self.start_server(&server.name, &server.config, config, install_config, docker).await;
+                let start_res = self.start_server(&server.name, &server.config, config, docker).await;
                 match start_res {
                     Ok(running_server) => self.servers[server_index].state = ServerState::Running(running_server),
                     Err(why) => error!("Could not start {}: {}", server.name, why),
@@ -217,7 +223,7 @@ impl<'docker> ServerCluster<'docker> {
         status
     }
 
-    async fn start_server(&self, name: &str, instance_config: &FilledInstanceConfig, config: &Config, docker: &'docker Docker) -> Result<RunningServer, Box<dyn Error>> {
+    async fn start_server(&self, name: &str, instance_config: &FilledInstanceConfig, config: &Config, docker: &Docker) -> Result<RunningServer, Box<dyn Error>> {
         let (auth_ports_in_use, game_ports_in_use): (HashSet<_>, HashSet<_>) = self.servers.iter().filter_map(|server| match &server.state {
             ServerState::NotRunning => None,
             ServerState::Running(RunningServer { auth_port, game_port, .. }) => Some((*auth_port, *game_port))
@@ -293,7 +299,7 @@ impl<'docker> ServerCluster<'docker> {
         }
 
         Ok(RunningServer {
-            container,
+            container_id: container.id().to_string(),
             auth_port,
             game_port,
         })
