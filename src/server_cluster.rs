@@ -264,7 +264,7 @@ impl ServerCluster {
             image: Some(config.docker_image.clone()),
             attach_stdout: Some(true),
             attach_stderr: Some(true),
-            attach_stdin: Some(false),
+            attach_stdin: Some(true),
             tty: Some(true),
 
             env: Some(env_vars),
