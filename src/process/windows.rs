@@ -1,6 +1,6 @@
 use std::ffi::CStr;
 use windows::Win32::Foundation::{CloseHandle, HANDLE, MAX_PATH, PSTR, WAIT_TIMEOUT};
-use windows::Win32::System::ProcessStatus::{K32EnumProcesses, K32EnumProcessModules, K32GetModuleBaseNameA};
+use windows::Win32::System::ProcessStatus::{K32EnumProcessModules, K32GetModuleBaseNameA};
 use windows::Win32::System::Threading::{HIGH_PRIORITY_CLASS, NORMAL_PRIORITY_CLASS, OpenProcess, PROCESS_QUERY_INFORMATION, PROCESS_SET_INFORMATION, PROCESS_SYNCHRONIZE, PROCESS_TERMINATE, PROCESS_VM_READ, REALTIME_PRIORITY_CLASS, SetPriorityClass, TerminateProcess, WaitForSingleObject};
 use crate::config::Priority;
 
@@ -86,27 +86,4 @@ impl Drop for Process {
     fn drop(&mut self) {
         unsafe { CloseHandle(self.handle) };
     }
-}
-
-pub fn iter_processes() -> impl Iterator<Item=Process> {
-    let mut processes_capacity = 1024;
-    let processes = loop {
-        let mut processes = vec![0; processes_capacity];
-        let mut cb_needed = 0;
-
-        unsafe {
-            K32EnumProcesses(&mut processes[0], (processes.len() * std::mem::size_of::<u32>()) as u32, &mut cb_needed);
-        }
-
-        let byte_count = cb_needed as usize;
-        if byte_count < processes_capacity {
-            let process_count = byte_count / std::mem::size_of::<u32>();
-            processes.truncate(process_count);
-            break processes;
-        } else {
-            processes_capacity *= 2;
-        }
-    };
-
-    processes.into_iter().filter_map(Process::new)
 }

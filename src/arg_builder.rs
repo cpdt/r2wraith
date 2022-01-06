@@ -80,7 +80,8 @@ impl IntoVarValue for String {
 }
 
 fn encode_string_var(val: String) -> String {
-    format!("\"{}\"", val)
+    val
+    //format!("\"{}\"", val)
 }
 
 #[derive(Debug, Clone)]
@@ -92,16 +93,16 @@ pub struct ArgBuilder {
 
 impl ArgBuilder {
     pub fn new() -> Self {
-        let mut builder = ArgBuilder {
+        let builder = ArgBuilder {
             flag_args: HashSet::new(),
             kv_args: HashMap::new(),
             playlist_vars: HashMap::new(),
         };
 
-        builder.flag_args.insert("-dedicated".to_string());
-        builder.flag_args.insert("-multiple".to_string());
-
         builder
+            .set_flag("-dedicated", true)
+            .set_flag("-multiple", true)
+            .set_kv("spewlog_enable", false)
     }
 
     fn set_flag(mut self, key: &str, is_enabled: bool) -> Self {
@@ -281,6 +282,7 @@ impl ArgBuilder {
             }))
             .set_playlist_var("earn_meter_pilot_multiplier", playlist_overrides.pilot_boost_meter_multiplier)
             .set_playlist_var("custom_air_accel_pilot", playlist_overrides.pilot_air_acceleration)
+            .set_playlist_var("no_pilot_collision", playlist_overrides.pilot_collision_enabled.map(|value| !value))
     }
 
     pub fn add_extra_playlist_vars(mut self, playlist_vars: HashMap<String, String>) -> Self {
@@ -290,7 +292,7 @@ impl ArgBuilder {
 
     pub fn add_extra_vars(mut self, extra_vars: HashMap<String, String>) -> Self {
         for (key, value) in extra_vars.into_iter() {
-            self.kv_args.insert(format!("+{}", key), encode_string_var(value));
+            self.kv_args.insert(format!("+{}", key), value);
         }
         self
     }

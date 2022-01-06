@@ -100,6 +100,7 @@ pub struct PlaylistOverrides {
     pub pilot_boost_meter_overdrive: Option<BoostMeterOverdrive>, // earn_meter_pilot_overdrive
     pub pilot_boost_meter_multiplier: Option<f64>, // earn_meter_pilot_multiplier
     pub pilot_air_acceleration: Option<f64>, // custom_air_accel_pilot
+    pub pilot_collision_enabled: Option<bool>, // no_pilot_collision, backwards
 }
 
 impl PlaylistOverrides {
@@ -141,6 +142,7 @@ impl PlaylistOverrides {
             pilot_boost_meter_overdrive: self.pilot_boost_meter_overdrive.or(other.pilot_boost_meter_overdrive),
             pilot_boost_meter_multiplier: self.pilot_boost_meter_multiplier.or(other.pilot_boost_meter_multiplier),
             pilot_air_acceleration: self.pilot_air_acceleration.or(other.pilot_air_acceleration),
+            pilot_collision_enabled: self.pilot_collision_enabled.or(other.pilot_collision_enabled),
         }
     }
 }
