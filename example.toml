@@ -1,4 +1,5 @@
-executable-path = "E:/Games/SteamLibrary/steamapps/common/Titanfall2/NorthstarLauncher.exe"
+docker-image = "northstar-dedicated"
+game-dir = "E:/titanfall2"
 
 [defaults]
 graphics-mode = "software"
@@ -8,16 +9,6 @@ player-permissions = "none"
 allow-insecure = true
 report-to-master = false
 
-# V this seems to work
-#[servers.gg]
-#name = "Gungame test"
-#description = "Testing"
-#playlist = "gg"
-#mode = "gg"
-#map = "mp_lf_deck"
-#countdown-length-seconds = 1
-#match-timelimit = 0.5
-
 [servers.tdm]
 name = "TDM test"
 description = "Testing"
@@ -25,39 +16,3 @@ playlist = "tdm"
 mode = "tdm"
 map = "mp_glitch"
 match-timelimit = 0.5
-
-#[servers.tdm]
-#name = "TDM test"
-#description = "Testing"
-#playlist = "tdm"
-#mode = "tdm"
-#map = "mp_angel_city"
-#match-timelimit = 0.5
-
-#[servers.ffa]
-#name = "Free for all 24/7"
-#description = "Always free for all"
-#playlist = "private_match"
-#mode = "ffa"
-#default-mode = "ffa"
-#score-limit = 999
-#time-limit-minutes = 999
-#countdown-length-seconds = 1
-#riffs = ["floor-is-lava", "shotguns-snipers"]
-#match-oob-timer-enabled = false
-
-#[servers.bunnings-ffa]
-#name = "[AU] Your local Bunnings Free-for-All"
-#description = "Where lowest prices are just the beginning. Free-for-all 24/7, 60Hz. Run by BunningsSnnag / cpdt#5830 on Discord."
-#playlist = "ffa"
-#mode = "ffa"
-#default-mode = "ffa"
-#score-limit = 999
-#time-limit-minutes = 999
-#
-#[servers.bunnings-gg]
-#name = "[AU] Your local Bunnings Gungame"
-#description = "Where lowest prices are just the beginning. Gungame 24/7, 60Hz. Run by BunningsSnnag / cpdt#5830 on Discord."
-#playlist = "gg"
-#mode = "gg"
-#default-mode = "gg"

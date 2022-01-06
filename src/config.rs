@@ -72,6 +72,7 @@ pub struct PlaylistOverrides {
     pub match_timelimit: Option<f64>, // timelimit
     pub match_round_timelimit: Option<f64>, // roundtimelimit
     pub match_oob_timer_enabled: Option<bool>, // oob_timer_enabled
+    pub match_max_players: Option<u32>, // max_players
 
     // Titan
     pub titan_boost_meter_multiplier: Option<f64>, // earn_meter_titan_multiplier
@@ -118,6 +119,7 @@ impl PlaylistOverrides {
             match_timelimit: self.match_timelimit.or(other.match_timelimit),
             match_round_timelimit: self.match_round_timelimit.or(other.match_round_timelimit),
             match_oob_timer_enabled: self.match_oob_timer_enabled.or(other.match_oob_timer_enabled),
+            match_max_players: self.match_max_players.or(other.match_max_players),
 
             titan_boost_meter_multiplier: self.titan_boost_meter_multiplier.or(other.titan_boost_meter_multiplier),
             titan_aegis_upgrades_enabled: self.titan_aegis_upgrades_enabled.or(other.titan_aegis_upgrades_enabled),
@@ -321,14 +323,11 @@ impl InstanceConfig {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct Config {
+    pub docker_image: String,
+    pub game_dir: String,
+
     #[serde(default = "default_poll_seconds")]
     pub poll_seconds: f64,
-
-    #[serde(default = "default_executable_path")]
-    pub executable_path: String,
-
-    #[serde(default = "default_process_name")]
-    pub process_name: String,
 
     #[serde(default = "default_auth_ports")]
     pub auth_ports: RangeInclusive<u16>,
@@ -344,12 +343,6 @@ pub struct Config {
 
 fn default_poll_seconds() -> f64 {
     5.
-}
-
-fn default_executable_path() -> String { "NorthstarLauncher.exe".to_string() }
-
-fn default_process_name() -> String {
-    "Titanfall2-unpacked.exe".to_string()
 }
 
 fn default_auth_ports() -> RangeInclusive<u16> {

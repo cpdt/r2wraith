@@ -11,8 +11,7 @@ portpicker = "0.1"
 rand = "0.8"
 serde = { version = "1.0", features = [ "derive" ] }
 serde_json = "1.0"
+shiplift = "0.7"
 simple_logger = "1.16"
 toml = "0.5"
-
-[target.'cfg(windows)'.dependencies]
-windows = { version = "0.29", features = ["Win32_Foundation", "Win32_Networking_WinSock", "Win32_NetworkManagement_IpHelper", "Win32_System_ProcessStatus", "Win32_System_Threading"] }
+tokio = "1.15"

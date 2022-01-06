@@ -1,32 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use crate::config::{BoostMeterOverdrive, FilledGameConfig, GraphicsMode, PilotBleedout, PlaylistOverrides, PrivateLobbyPlayerPermissions, Riff};
 
-// A list of variables we set that need to be removed from the built-in config file
-pub const KNOWN_VARS: &[&str] = &[
-    "ns_server_name",
-    "ns_player_auth_port",
-    "ns_server_desc",
-    "ns_server_password",
-    "sv_updaterate_mp",
-    "sv_minupdaterate",
-    "sv_max_snapshots_multiplayer",
-    "base_tickinterval_mp",
-    "ns_report_server_to_masterserver",
-    "ns_auth_allow_insecure",
-    "net_usesocketsforloopback",
-    "everything_unlocked",
-    "ns_should_return_to_lobby",
-    "ns_private_match_only_host_can_change_settings",
-    "ns_private_match_only_host_can_start",
-    "ns_private_match_countdown_length",
-    "setplaylist",
-    "mp_gamemode",
-    "map",
-    "ns_private_match_last_mode",
-    "ns_private_match_last_map",
-    "setplaylistvaroverrides",
-];
-
 trait IntoVarValue {
     fn into_var_value(self) -> Option<String>;
 }
@@ -75,17 +49,13 @@ impl IntoVarValue for f64 {
 
 impl IntoVarValue for String {
     fn into_var_value(self) -> Option<String> {
-        Some(encode_string_var(self))
+        Some(self)
     }
-}
-
-fn encode_string_var(val: String) -> String {
-    val
-    //format!("\"{}\"", val)
 }
 
 #[derive(Debug, Clone)]
 pub struct ArgBuilder {
+    kv_env_args: HashMap::new(),
     flag_args: HashSet<String>,
     kv_args: HashMap<String, String>,
     playlist_vars: HashMap<String, String>,
@@ -94,6 +64,7 @@ pub struct ArgBuilder {
 impl ArgBuilder {
     pub fn new() -> Self {
         let builder = ArgBuilder {
+            kv_env_args: HashMap::new(),
             flag_args: HashSet::new(),
             kv_args: HashMap::new(),
             playlist_vars: HashMap::new(),
@@ -114,6 +85,14 @@ impl ArgBuilder {
         self
     }
 
+    fn set_kv_env(mut self, key: &str, value: impl IntoVarValue) -> Self {
+        match value.into_var_value() {
+            Some(val) => self.kv_env_args.insert(key.to_string(), val),
+            None => self.kv_env_args.remove(key),
+        };
+        self
+    }
+
     fn set_kv(mut self, key: &str, value: impl IntoVarValue) -> Self {
         match value.into_var_value() {
             Some(val) => self.kv_args.insert(key.to_string(), val),
@@ -131,23 +110,23 @@ impl ArgBuilder {
     }
 
     pub fn set_name(self, name: String) -> Self {
-        self.set_kv("+ns_server_name", name)
+        self.set_kv_env("NS_SERVER_NAME", name)
     }
 
     pub fn set_auth_port(self, auth_port: u16) -> Self {
-        self.set_kv("+ns_player_auth_port", auth_port)
+        self.set_kv_env("NS_PORT_AUTH", auth_port)
     }
 
     pub fn set_game_port(self, game_port: u16) -> Self {
-        self.set_kv("-port", game_port)
+        self.set_kv_env("NS_PORT", game_port)
     }
 
     pub fn set_description(self, description: String) -> Self {
-        self.set_kv("+ns_server_desc", description)
+        self.set_kv_env("NS_SERVER_DESC", description)
     }
 
     pub fn set_password(self, password: String) -> Self {
-        self.set_kv("+ns_server_password", password)
+        self.set_kv_env("NS_SERVER_PASSWORD", password)
     }
 
     pub fn set_tick_rate(self, tick_rate: u32) -> Self {
@@ -158,11 +137,11 @@ impl ArgBuilder {
     }
 
     pub fn set_report_to_master(self, report_to_master: bool) -> Self {
-        self.set_kv("+ns_report_server_to_masterserver", report_to_master)
+        self.set_kv_env("NS_MASTERSERVER_REGISTER", report_to_master)
     }
 
     pub fn set_allow_insecure(self, allow_insecure: bool) -> Self {
-        self.set_kv("+ns_auth_allow_insecure", allow_insecure)
+        self.set_kv_env("NS_INSECURE", allow_insecure)
     }
 
     pub fn set_use_sockets_for_loopback(self, use_sockets_for_loopback: bool) -> Self {
@@ -246,6 +225,8 @@ impl ArgBuilder {
             .set_playlist_var("timelimit", playlist_overrides.match_timelimit)
             .set_playlist_var("roundtimelimit", playlist_overrides.match_round_timelimit)
             .set_playlist_var("oob_timer_enabled", playlist_overrides.match_oob_timer_enabled)
+            .set_playlist_var("max_players", playlist_overrides.match_max_players)
+            .set_flag("-maxplayersplaylist", playlist_overrides.match_max_players.is_some())
 
             // Titan
             .set_playlist_var("earn_meter_titan_multiplier", playlist_overrides.titan_boost_meter_multiplier)
@@ -320,12 +301,17 @@ impl ArgBuilder {
             .add_extra_vars(game_config.extra_vars)
     }
 
-    pub fn build(self, out_args: &mut Vec<String>) {
-        out_args.extend(self.flag_args);
-        out_args.extend(self.kv_args.into_iter().flat_map(|(key, value)| [key, value]));
-
-        out_args.push("+setplaylistvaroverrides".to_string());
+    pub fn build(mut self, out_envs: &mut Vec<String>) {
+        let mut extra_args = Vec::new();
+        extra_args.extend(self.flag_args);
+        extra_args.extend(self.kv_args.into_iter().flat_map(|(key, value)| [key, value]));
+        extra_args.push("+setplaylistvaroverrides".to_string());
         let playlist_args_list: Vec<_> = self.playlist_vars.into_iter().flat_map(|(key, value)| [key, value]).collect();
-        out_args.push(encode_string_var(playlist_args_list.join(" ")));
+        extra_args.push(playlist_args_list.join(" "));
+
+        let env_args = self
+            .set_kv_env("NS_EXTRA_ARGUMENTS", extra_args.iter().map(|arg| format!("\\\"{}\\\"", arg)).collect::<Vec<_>>().join(" "))
+            .kv_env_args;
+        out_envs.extend(env_args.into_iter().map(|(key, value)| format!("{}={}", key, value)));
     }
 }
