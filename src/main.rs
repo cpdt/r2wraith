@@ -12,10 +12,10 @@ mod arg_builder;
 mod config;
 mod server_cluster;
 
-enum ReplCommand<'docker> {
+enum ReplCommand {
     StopAll,
     StopWraith,
-    SetServers(Vec<Server<'docker>>),
+    SetServers(Vec<Server>),
     StopOld,
     RestartAll,
     Restart(String),

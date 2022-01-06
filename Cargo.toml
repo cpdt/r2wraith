@@ -14,4 +14,4 @@ serde_json = "1.0"
 shiplift = "0.7"
 simple_logger = "1.16"
 toml = "0.5"
-tokio = "1.15"
+tokio = { version = "1.15", features = [ "full" ] }
