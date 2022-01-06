@@ -205,7 +205,7 @@ impl ServerCluster {
             let server = &mut self.servers[server_index];
             if let ServerState::Running(running_server) = &server.state {
                 if !is_container_running(&running_server.container(docker)) {
-                    warn!("Server {} appears to have stopped (container {} is no longer running)", server.name, container.id());
+                    warn!("Server {} appears to have stopped (container {} is no longer running)", server.name, running_server.container_id);
                     server.state = ServerState::NotRunning;
                 }
             }
@@ -306,6 +306,6 @@ impl ServerCluster {
     }
 }
 
-async fn is_container_running(container: &Container) -> bool {
+async fn is_container_running(container: &'_ Container) -> bool {
     container.inspect().await.map(|details| details.state.running).unwrap_or(false)
 }

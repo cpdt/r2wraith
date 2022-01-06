@@ -4,7 +4,6 @@ use std::time::Duration;
 use log::{debug, error, info, warn};
 use shiplift::Docker;
 use tokio::sync::mpsc::unbounded_channel;
-use toml::Value::String;
 use crate::config::Config;
 use crate::server_cluster::{PollStatus, SerializedServer, Server, ServerCluster};
 
@@ -197,6 +196,12 @@ fn load_config(config_path: &Path) -> Result<Config, Box<dyn Error>> {
 
 fn load_serialized_servers(restore_path: &Path) -> Result<Vec<SerializedServer>, Box<dyn Error>> {
     Ok(serde_json::from_str(&std::fs::read_to_string(restore_path)?)?)
+}
+
+fn store_serialized_servers(restore_path: &Path, server_cluster: &ServerCluster) -> Result<(), Box<dyn Error>> {
+    let serialized_servers = serde_json::to_string(&server_cluster.serialize_all())?;
+    std::fs::write(&restore_path, serialized_servers)?;
+    Ok(())
 }
 
 fn get_server_list_from_config(config: &Config) -> Vec<Server> {

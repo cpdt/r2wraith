@@ -55,7 +55,7 @@ impl IntoVarValue for String {
 
 #[derive(Debug, Clone)]
 pub struct ArgBuilder {
-    kv_env_args: HashMap::new(),
+    kv_env_args: HashMap<String, String>,
     flag_args: HashSet<String>,
     kv_args: HashMap<String, String>,
     playlist_vars: HashMap<String, String>,
