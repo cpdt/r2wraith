@@ -26,7 +26,7 @@ impl Display for StartServerError {
             StartServerError::NoAuthPortsAvailable(ports) => write!(f, "No auth ports between {} and {} are free", ports.start(), ports.end()),
             StartServerError::SpecificGamePortInUse(port) => write!(f, "Specified game port {} is not free", port),
             StartServerError::NoGamePortsAvailable(ports) => write!(f, "No game ports between {} and {} are free", ports.start(), ports.end()),
-            StartServerError::ProcessCrashedWhileStarting => write!(f, "The process crashed while initializing"),
+            StartServerError::ProcessCrashedWhileStarting => write!(f, "The container crashed while initializing"),
         }
     }
 }
@@ -272,13 +272,14 @@ impl ServerCluster {
                     .expose(auth_port as u32, "tcp", auth_port as u32)
                     .expose(game_port as u32, "udp", game_port as u32)
                     .env(&env_vars)
+                    .attach_stdout(true)
+                    .attach_stderr(true)
                     .auto_remove(true)
                     .build()
             )
             .await?;
         let container = docker.containers().get(&info.id);
         info!("Server {} has started with container {}", name, container.id());
-
 
         // Wait for the auth server to start on the required port
         loop {

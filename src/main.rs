@@ -1,7 +1,7 @@
 use std::error::Error;
 use std::path::Path;
 use std::time::Duration;
-use log::{debug, error, info, warn};
+use log::{debug, error, info, LevelFilter, warn};
 use shiplift::Docker;
 use tokio::sync::mpsc::unbounded_channel;
 use crate::config::Config;
@@ -25,6 +25,7 @@ enum ReplCommand {
 async fn main() {
     simple_logger::SimpleLogger::new()
         .with_utc_timestamps()
+        .with_level(LevelFilter::Debug)
         .init()
         .unwrap();
 
