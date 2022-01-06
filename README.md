@@ -1,5 +1,7 @@
 # R2Wraith
 
+**Work in progress! This hasn't been tested thoroughly and a lot of things probably don't work.**
+
 R2Wraith is a batteries-included server management tool for the [Northstar Titanfall2 mod](https://github.com/R2Northstar/Northstar).
 It provides:
 
@@ -7,6 +9,8 @@ It provides:
  - Process watching functionality to restart crashed servers.
  - Functionality to reload config or restart R2Wraith while keeping servers running.
  - An entirely commandline-based interface for dedicated headless servers.
+
+This tool depends on pg9182's [northstar-dedicated](https://github.com/pg9182/northstar-dedicated) Docker image.
 
 The latest builds are available on the Releases page. Build instructions are included at the bottom of this document.
 
@@ -43,8 +47,8 @@ Config file structure and defaults:
 
 ```toml
 poll-seconds = 5                            # how often to check each server's running state
-executable-path = "NorthstarLauncher.exe"   # executable to launch the server, relative to this file
-process-name = "Titanfall2-unpacked.exe"    # name of the actual server process
+docker-image = "northstar-dedicated"        # name of docker image to run
+game-dir = "/titanfall"                     # location of the game directory
 auth-ports = { start = 8081, end = 8085 }   # range of ports available to use for the Northstar auth server
 game-ports = { start = 37015, end = 37020 } # range of ports available to use for the game server
 
@@ -216,6 +220,7 @@ The following playlist overrides can be set. Use `extra-playlist-vars` to set an
  - `match-timelimit` - number
  - `match-round-timelimit` - number
  - `match-oob-timer-enabled` - `true`/`false`
+ - `match-max-players` - number
  - `titan-boost-meter-multiplier` - number
  - `titan-aegis-upgrades-enabled` - `true`/`false`
  - `titan-infinite-doomed-state-enabled` - `true`/`false`
@@ -236,6 +241,7 @@ The following playlist overrides can be set. Use `extra-playlist-vars` to set an
  - `pilot-boost-meter-overdrive` - `"enabled"`/`"disabled"`/`"only"`
  - `pilot-boost-meter-multiplier` - number
  - `pilot-air-acceleration` - number
+ - `pilot-collision-enabled` - `true`/`false`
 
 #### `extra-playlist-vars`
 
