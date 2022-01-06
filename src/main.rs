@@ -25,9 +25,8 @@ enum ReplCommand {
 async fn main() {
     simple_logger::SimpleLogger::new()
         .with_utc_timestamps()
-        //.with_level(LevelFilter::Off)
-        //.with_module_level("r2wraith", LevelFilter::Debug)
-        .with_level(LevelFilter::Debug)
+        .with_level(LevelFilter::Off)
+        .with_module_level("r2wraith", LevelFilter::Debug)
         .init()
         .unwrap();
 
