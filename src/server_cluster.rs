@@ -199,7 +199,7 @@ impl ServerCluster {
         let restart_servers_futures = self.servers.iter().enumerate().map(|(server_index, server)| async move {
             let running_server = match &server.state {
                 ServerState::Running(running_server) => running_server,
-                _ => return None,
+                ServerState::NotRunning => return Some(server_index),
             };
 
             let details = match docker.inspect_container(&running_server.container_id, None).await.ok() {
