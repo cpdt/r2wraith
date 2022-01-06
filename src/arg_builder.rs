@@ -71,8 +71,6 @@ impl ArgBuilder {
         };
 
         builder
-            .set_flag("-dedicated", true)
-            .set_flag("-multiple", true)
             .set_kv("+spewlog_enable", false)
     }
 
