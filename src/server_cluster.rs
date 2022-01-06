@@ -88,13 +88,17 @@ impl Server {
         }
     }
 
-    pub async fn stop(&mut self, docker: &Docker) -> shiplift::Result<()> {
+    pub async fn stop(&mut self, docker: &Docker) {
         if let ServerState::Running(running_server) = &self.state {
-            running_server.container(docker).stop(None).await?;
-            info!("Stopped {}", self.name);
+            match running_server.container(docker).stop(None).await {
+                Ok(()) => info!("Stopped {}", self.name),
+                Err(why) => {
+                    error!("Failed to stop {}: {}", self.name, why);
+                    return;
+                }
+            }
         }
         self.state = ServerState::NotRunning;
-        Ok(())
     }
 }
 
@@ -103,20 +107,8 @@ impl ServerCluster {
         Self::default()
     }
 
-    pub fn get(&self, name: &str) -> Option<&Server> {
-        self.servers.iter().find(|server| server.name == name)
-    }
-
     pub fn get_mut(&mut self, name: &str) -> Option<&mut Server> {
         self.servers.iter_mut().find(|server| server.name == name)
-    }
-
-    pub fn iter(&self) -> impl Iterator<Item=&Server> {
-        self.servers.iter()
-    }
-
-    pub fn iter_mut(&mut self) -> impl Iterator<Item=&mut Server> {
-        self.servers.iter_mut()
     }
 
     pub fn load_servers(&mut self, mut new_servers: Vec<Server>) {
