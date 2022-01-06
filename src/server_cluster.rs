@@ -262,6 +262,9 @@ impl ServerCluster {
             image: Some(config.docker_image.clone()),
             attach_stdout: Some(true),
             attach_stderr: Some(true),
+            attach_stdin: Some(false),
+            tty: Some(true),
+
             env: Some(env_vars),
             host_config: Some(HostConfig {
                 binds: Some(vec![format!("{}:/mnt/titanfall:ro", config.game_dir)]),
