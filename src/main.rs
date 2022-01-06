@@ -123,8 +123,12 @@ async fn main() {
                         }
                         Some(ReplCommand::Restart(server_name)) => {
                             match server_cluster.get_mut(&server_name) {
-                                Some(server) => server.stop(&docker).await,
-                                None => info!("Unknown server {}", server_name),
+                                Some(server) => {
+                                    server.stop(&docker).await;
+                                }
+                                None => {
+                                    info!("Unknown server {}", server_name);
+                                }
                             };
                         }
                         None => break,
