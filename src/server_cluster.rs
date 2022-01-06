@@ -3,7 +3,7 @@ use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::ops::RangeInclusive;
 use std::time::Duration;
-use bollard::container::{LogOutput, LogsOptions};
+use bollard::container::{CreateContainerOptions, LogOutput, LogsOptions};
 use bollard::Docker;
 use bollard::models::{HostConfig, PortBinding};
 use log::{debug, error, info, warn};
@@ -286,7 +286,9 @@ impl ServerCluster {
             ..Default::default()
         };
         let create_response = docker
-            .create_container::<String, String>(None, container_config)
+            .create_container(Some(CreateContainerOptions {
+                name: format!("r2wraith-{}", name)
+            }), container_config)
             .await?;
         if !create_response.warnings.is_empty() {
             for warning in &create_response.warnings {
