@@ -38,6 +38,7 @@ pub enum PollStatus {
     NoWork,
 }
 
+#[derive(Debug)]
 pub struct RunningServer {
     container_id: String,
     auth_port: u16,
@@ -50,11 +51,13 @@ impl RunningServer {
     }
 }
 
+#[derive(Debug)]
 pub enum ServerState {
     NotRunning,
     Running(RunningServer),
 }
 
+#[derive(Debug)]
 pub struct Server {
     pub name: String,
     pub config: FilledInstanceConfig,
@@ -62,7 +65,7 @@ pub struct Server {
     pub is_old: bool,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct SerializedServer {
     pub name: String,
     pub container_id: String,

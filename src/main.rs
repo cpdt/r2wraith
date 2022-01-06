@@ -11,6 +11,7 @@ mod arg_builder;
 mod config;
 mod server_cluster;
 
+#[derive(Debug)]
 enum ReplCommand {
     StopAll,
     StopWraith,
