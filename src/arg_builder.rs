@@ -309,9 +309,8 @@ impl ArgBuilder {
         let playlist_args_list: Vec<_> = self.playlist_vars.into_iter().flat_map(|(key, value)| [key, value]).collect();
         extra_args.push(playlist_args_list.join(" "));
 
-        let env_args = self
-            .set_kv_env("NS_EXTRA_ARGUMENTS", extra_args.iter().map(|arg| format!("\\\"{}\\\"", arg)).collect::<Vec<_>>().join(" "))
-            .kv_env_args;
+        let mut env_args = self.kv_env_args;
+        env_args.insert("NS_EXTRA_ARGUMENTS".to_string(), extra_args.iter().map(|arg| format!("\"{}\"", arg)).collect::<Vec<_>>().join(" "));
         out_envs.extend(env_args.into_iter().map(|(key, value)| format!("{}={}", key, value)));
     }
 }
