@@ -23,7 +23,10 @@ enum ReplCommand {
 
 #[tokio::main]
 async fn main() {
-    simple_logger::SimpleLogger::new().init().unwrap();
+    simple_logger::SimpleLogger::new()
+        .with_utc_timestamps()
+        .init()
+        .unwrap();
 
     let mut args = std::env::args();
     let exe_name = args.next().unwrap();
