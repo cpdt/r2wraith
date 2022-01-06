@@ -301,7 +301,7 @@ impl ArgBuilder {
             .add_extra_vars(game_config.extra_vars)
     }
 
-    pub fn build(mut self, out_envs: &mut Vec<String>) {
+    pub fn build(self, out_envs: &mut Vec<String>) {
         let mut extra_args = Vec::new();
         extra_args.extend(self.flag_args);
         extra_args.extend(self.kv_args.into_iter().flat_map(|(key, value)| [key, value]));

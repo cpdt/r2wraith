@@ -50,7 +50,6 @@ async fn main() {
     let full_config_path = std::env::current_dir().unwrap().join(&config_file_path);
     let restore_file_path = std::env::current_dir().unwrap().join(&format!("{}.restore.json", config_file_path));
 
-    let config_dir = full_config_path.parent().unwrap();
     let mut config = match load_config(&full_config_path) {
         Ok(config) => config,
         Err(why) => {
@@ -88,7 +87,7 @@ async fn main() {
     server_cluster.poll(&config, &docker).await;
     info!("Ready!");
 
-    let (mut repl_sender, mut repl_receiver) = unbounded_channel::<ReplCommand>();
+    let (repl_sender, mut repl_receiver) = unbounded_channel::<ReplCommand>();
 
     let server_join_handle = tokio::spawn(async move {
         let docker = docker;
@@ -144,7 +143,7 @@ async fn main() {
     });
 
     // Start REPL
-    let repl_join_handle = tokio::task::spawn_blocking(|| {
+    let repl_join_handle = tokio::task::spawn_blocking(move || {
         loop {
             let mut buffer = String::new();
             if let Err(_) = std::io::stdin().read_line(&mut buffer) {
