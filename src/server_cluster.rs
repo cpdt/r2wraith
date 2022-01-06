@@ -3,10 +3,12 @@ use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::ops::RangeInclusive;
 use std::time::Duration;
+use bollard::container::{LogOutput, LogsOptions};
 use bollard::Docker;
 use bollard::models::{HostConfig, PortBinding};
 use log::{debug, error, info, warn};
 use serde::{Serialize, Deserialize};
+use tokio_stream::StreamExt;
 use crate::Config;
 use crate::arg_builder::ArgBuilder;
 use crate::config::FilledInstanceConfig;
@@ -294,6 +296,23 @@ impl ServerCluster {
 
         let container_id = create_response.id;
         docker.start_container::<String>(&container_id, None).await?;
+        let mut logs = docker.logs(&container_id, Some(LogsOptions::<String> {
+            stdout: true,
+            stderr: true,
+            ..Default::default()
+        }));
+        tokio::spawn(async move {
+            while let Some(log_next) = logs.next().await {
+                match log_next {
+                    Ok(LogOutput::StdErr { message }) => eprintln!("{}", std::str::from_utf8(message.as_ref()).unwrap()),
+                    Ok(LogOutput::StdOut { message }) => eprintln!("{}", std::str::from_utf8(message.as_ref()).unwrap()),
+                    Ok(LogOutput::Console { message }) => eprintln!("{}", std::str::from_utf8(message.as_ref()).unwrap()),
+                    Ok(_) => {},
+                    Err(why) => error!("Failed to read log lines: {}", why),
+                }
+            }
+        });
+
         info!("Server {} has started with container {}", name, container_id);
 
         // Wait for the auth server to start on the required port

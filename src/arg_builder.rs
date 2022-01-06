@@ -73,7 +73,7 @@ impl ArgBuilder {
         builder
             .set_flag("-dedicated", true)
             .set_flag("-multiple", true)
-            .set_kv("spewlog_enable", false)
+            .set_kv("+spewlog_enable", false)
     }
 
     fn set_flag(mut self, key: &str, is_enabled: bool) -> Self {
