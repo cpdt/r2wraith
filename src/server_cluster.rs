@@ -296,7 +296,7 @@ impl ServerCluster {
 
         let container_id = create_response.id;
         docker.start_container::<String>(&container_id, None).await?;
-        let mut logs = docker.logs(&container_id, Some(LogsOptions::<String> {
+        /*let mut logs = docker.logs(&container_id, Some(LogsOptions::<String> {
             stdout: true,
             stderr: true,
             ..Default::default()
@@ -311,7 +311,7 @@ impl ServerCluster {
                     Err(why) => error!("Failed to read log lines: {}", why),
                 }
             }
-        });
+        });*/
 
         info!("Server {} has started with container {}", name, container_id);
 
