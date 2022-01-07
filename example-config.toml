@@ -3,6 +3,7 @@ graphics-mode = "software"
 tick-rate = 60
 should-return-to-lobby = false
 player-permissions = "none"
+match-epilogue-enabled = false
 
 [servers.everything]
 name = "Playlist 24/7"
@@ -11,15 +12,15 @@ description = "A lil bit of everything"
 [servers.slayer]
 name = "Slayer 24/7"
 description = "Always Slayer"
-playlist = "tdm"
 mode = "tdm"
+map = "mp_glitch"
 score-limit = 100
 time-limit-minutes = 15
 
 [servers.ffa]
 name = "Free for all 24/7"
 description = "Always free for all"
-playlist = "ffa"
 mode = "ffa"
+map = "mp_drydock"
 score-limit = 999
 time-limit-minutes = 999

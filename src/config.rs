@@ -11,14 +11,6 @@ pub enum GraphicsMode {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "kebab-case")]
-pub enum Priority {
-    Normal,
-    High,
-    RealTime,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "kebab-case")]
 pub enum PrivateLobbyPlayerPermissions {
     All,
     MapModeOnly,
@@ -164,7 +156,6 @@ pub struct FilledGameConfig {
     pub countdown_length_seconds: u32,
 
     pub graphics_mode: GraphicsMode,
-    pub priority: Priority,
 
     pub playlist: String,
     pub mode: Option<String>,
@@ -194,7 +185,6 @@ pub struct GameConfig {
     pub countdown_length_seconds: Option<u32>,
 
     pub graphics_mode: Option<GraphicsMode>,
-    pub priority: Option<Priority>,
 
     pub playlist: Option<String>,
     pub mode: Option<String>,
@@ -240,7 +230,6 @@ impl GameConfig {
             countdown_length_seconds: self.countdown_length_seconds.or(other.countdown_length_seconds),
 
             graphics_mode: self.graphics_mode.or(other.graphics_mode),
-            priority: self.priority.or(other.priority),
 
             playlist: self.playlist.or(other.playlist),
             mode: self.mode.or(other.mode),
@@ -273,7 +262,6 @@ impl Into<FilledGameConfig> for GameConfig {
             countdown_length_seconds: self.countdown_length_seconds.unwrap_or(15),
 
             graphics_mode: self.graphics_mode.unwrap_or(GraphicsMode::Default),
-            priority: self.priority.unwrap_or(Priority::High),
 
             playlist: self.playlist.unwrap_or("private_match".to_string()),
             mode: self.mode,

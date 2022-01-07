@@ -161,14 +161,6 @@ all servers.
  - Default: `"default"`
  - Example: `graphics-mode = "software"`
 
-#### `priority`
-
- - Controls the priority class of server processes. A higher priority asks the operating system to give the process a
-   larger slice of processing time, potentially slowing down other processes with lower priorities.
- - Possible values: `"normal"`, `"high"`, `"real-time"`
- - Default: `"high"`
- - Example: `priority = "normal"`
-
 #### `playlist`
 
  - Sets the playlist used by this server, determining which maps and modes are active. Sets the `setplaylist` convar.
