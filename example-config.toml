@@ -1,6 +1,5 @@
 [defaults]
 graphics-mode = "software"
-tick-rate = 60
 should-return-to-lobby = false
 player-permissions = "none"
 match-epilogue-enabled = false

@@ -128,9 +128,13 @@ impl ArgBuilder {
     }
 
     pub fn set_tick_rate(self, tick_rate: u32) -> Self {
-        self.set_kv("+sv_updaterate_mp", tick_rate)
-            .set_kv("+sv_minupdaterate", tick_rate)
-            .set_kv("+sv_max_snapshots_multiplayer", tick_rate * 15)
+        self.set_kv("+base_tickinterval_mp", 1. / tick_rate as f64)
+    }
+
+    pub fn set_update_rate(self, update_rate: u32) -> Self {
+        self.set_kv("+sv_updaterate_mp", update_rate)
+            .set_kv("+sv_minupdaterate", update_rate)
+            .set_kv("+sv_max_snapshots_multiplayer", update_rate * 15)
             .set_kv("+base_tickinterval_mp", 1. / tick_rate as f64)
     }
 
@@ -280,6 +284,7 @@ impl ArgBuilder {
         self.set_description(game_config.description)
             .set_password(game_config.password)
             .set_tick_rate(game_config.tick_rate)
+            .set_update_rate(game_config.update_rate)
             .set_report_to_master(game_config.report_to_master)
             .set_allow_insecure(game_config.allow_insecure)
             .set_use_sockets_for_loopback(game_config.use_sockets_for_loopback)
