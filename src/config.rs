@@ -147,7 +147,6 @@ pub struct FilledGameConfig {
     pub password: String,
     pub tick_rate: u32,
     pub update_rate: u32,
-    pub timescale: f64,
     pub report_to_master: bool,
     pub allow_insecure: bool,
     pub use_sockets_for_loopback: bool,
@@ -158,6 +157,10 @@ pub struct FilledGameConfig {
     pub countdown_length_seconds: u32,
 
     pub graphics_mode: GraphicsMode,
+    pub perf_memory_limit_bytes: Option<i64>,
+    pub perf_virtual_memory_limit_bytes: Option<i64>,
+    pub perf_cpus: Option<f64>,
+    pub perf_cpu_set: Option<String>,
 
     pub playlist: String,
     pub mode: Option<String>,
@@ -178,7 +181,6 @@ pub struct GameConfig {
     pub password: Option<String>,
     pub tick_rate: Option<u32>,
     pub update_rate: Option<u32>,
-    pub timescale: Option<f64>,
     pub report_to_master: Option<bool>,
     pub allow_insecure: Option<bool>,
     pub use_sockets_for_loopback: Option<bool>,
@@ -189,6 +191,10 @@ pub struct GameConfig {
     pub countdown_length_seconds: Option<u32>,
 
     pub graphics_mode: Option<GraphicsMode>,
+    pub perf_memory_limit_bytes: Option<i64>,
+    pub perf_virtual_memory_limit_bytes: Option<i64>,
+    pub perf_cpus: Option<f64>,
+    pub perf_cpu_set: Option<String>,
 
     pub playlist: Option<String>,
     pub mode: Option<String>,
@@ -225,7 +231,6 @@ impl GameConfig {
             password: self.password.or(other.password),
             tick_rate: self.tick_rate.or(other.tick_rate),
             update_rate: self.update_rate.or(other.update_rate),
-            timescale: self.timescale.or(other.timescale),
             report_to_master: self.report_to_master.or(other.report_to_master),
             allow_insecure: self.allow_insecure.or(other.allow_insecure),
             use_sockets_for_loopback: self.use_sockets_for_loopback.or(other.use_sockets_for_loopback),
@@ -236,6 +241,10 @@ impl GameConfig {
             countdown_length_seconds: self.countdown_length_seconds.or(other.countdown_length_seconds),
 
             graphics_mode: self.graphics_mode.or(other.graphics_mode),
+            perf_memory_limit_bytes: self.perf_memory_limit_bytes.or(other.perf_memory_limit_bytes),
+            perf_virtual_memory_limit_bytes: self.perf_virtual_memory_limit_bytes.or(other.perf_virtual_memory_limit_bytes),
+            perf_cpus: self.perf_cpus.or(other.perf_cpus),
+            perf_cpu_set: self.perf_cpu_set.or(other.perf_cpu_set),
 
             playlist: self.playlist.or(other.playlist),
             mode: self.mode.or(other.mode),
@@ -259,7 +268,6 @@ impl Into<FilledGameConfig> for GameConfig {
             password: self.password.unwrap_or("".to_string()),
             tick_rate: self.tick_rate.unwrap_or(60),
             update_rate: self.update_rate.unwrap_or(20),
-            timescale: self.timescale.unwrap_or(1.),
             report_to_master: self.report_to_master.unwrap_or(true),
             allow_insecure: self.allow_insecure.unwrap_or(false),
             use_sockets_for_loopback: self.use_sockets_for_loopback.unwrap_or(true),
@@ -270,6 +278,10 @@ impl Into<FilledGameConfig> for GameConfig {
             countdown_length_seconds: self.countdown_length_seconds.unwrap_or(15),
 
             graphics_mode: self.graphics_mode.unwrap_or(GraphicsMode::Default),
+            perf_memory_limit_bytes: self.perf_memory_limit_bytes,
+            perf_virtual_memory_limit_bytes: self.perf_virtual_memory_limit_bytes,
+            perf_cpus: self.perf_cpus,
+            perf_cpu_set: self.perf_cpu_set,
 
             playlist: self.playlist.unwrap_or("private_match".to_string()),
             mode: self.mode,

@@ -321,6 +321,13 @@ impl ServerCluster {
                     }])),
                 ].into_iter().collect()),
                 auto_remove: Some(true),
+
+                memory: instance_config.game_config.perf_memory_limit_bytes,
+                memory_swap: instance_config.game_config.perf_virtual_memory_limit_bytes,
+                cpu_period: instance_config.game_config.perf_cpus.map(|_| 100000),
+                cpu_quota: instance_config.game_config.perf_cpus.map(|cpus| (cpus * 100000.) as i64),
+                cpuset_cpus: instance_config.game_config.perf_cpu_set.clone(),
+
                 ..Default::default()
             }),
             ..Default::default()
