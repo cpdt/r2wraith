@@ -101,6 +101,13 @@ all servers.
  - Default: `20`
  - Example: `update-rate = 60`
 
+#### `timescale`
+
+ - Sets the timescale for the server, slowing down or speeding up the game for all players. Sets the `host_timescale`
+   convar.
+ - Default: `1`
+ - Example: `timescale = 0.5`
+
 #### `report-to-master`
 
  - Whether this server should be registered with the master server, allowing it to be shown on the in-game server list.

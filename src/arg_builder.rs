@@ -137,6 +137,10 @@ impl ArgBuilder {
             .set_kv("+sv_max_snapshots_multiplayer", update_rate * 15)
     }
 
+    pub fn set_timescale(self, timescale: f64) -> Self {
+        self.set_kv("+host_timescale", timescale)
+    }
+
     pub fn set_report_to_master(self, report_to_master: bool) -> Self {
         self.set_kv_env("NS_MASTERSERVER_REGISTER", report_to_master)
     }
@@ -284,6 +288,7 @@ impl ArgBuilder {
             .set_password(game_config.password)
             .set_tick_rate(game_config.tick_rate)
             .set_update_rate(game_config.update_rate)
+            .set_timescale(game_config.timescale)
             .set_report_to_master(game_config.report_to_master)
             .set_allow_insecure(game_config.allow_insecure)
             .set_use_sockets_for_loopback(game_config.use_sockets_for_loopback)
