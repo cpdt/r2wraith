@@ -73,6 +73,8 @@ async fn main() {
 
     // Change the titanfall path to be relative to the config file
     config.game_dir = full_config_path
+        .parent()
+        .unwrap()
         .join(config.game_dir)
         .to_string_lossy()
         .to_string();
