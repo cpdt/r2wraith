@@ -88,7 +88,7 @@ impl Server {
     ) -> Result<(), Box<dyn Error>> {
         let mut env_vars = Vec::new();
         ArgBuilder::new()
-            .set_name(self.name.clone())
+            .set_name(self.config.name.clone())
             .set_auth_port(auth_port)
             .set_game_port(game_port)
             .set_game_config(self.config.game_config.clone())
