@@ -1,4 +1,5 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
+use linked_hash_map::LinkedHashMap;
 use crate::config::{BoostMeterOverdrive, FilledGameConfig, GraphicsMode, PilotBleedout, PlaylistOverrides, PrivateLobbyPlayerPermissions, Riff};
 
 trait IntoVarValue {
@@ -55,19 +56,19 @@ impl IntoVarValue for String {
 
 #[derive(Debug, Clone)]
 pub struct ArgBuilder {
-    kv_env_args: HashMap<String, String>,
+    kv_env_args: LinkedHashMap<String, String>,
     flag_args: HashSet<String>,
-    kv_args: HashMap<String, String>,
-    playlist_vars: HashMap<String, String>,
+    kv_args: LinkedHashMap<String, String>,
+    playlist_vars: LinkedHashMap<String, String>,
 }
 
 impl ArgBuilder {
     pub fn new() -> Self {
         let builder = ArgBuilder {
-            kv_env_args: HashMap::new(),
+            kv_env_args: LinkedHashMap::new(),
             flag_args: HashSet::new(),
-            kv_args: HashMap::new(),
-            playlist_vars: HashMap::new(),
+            kv_args: LinkedHashMap::new(),
+            playlist_vars: LinkedHashMap::new(),
         };
 
         builder
@@ -267,12 +268,12 @@ impl ArgBuilder {
             .set_playlist_var("no_pilot_collision", playlist_overrides.pilot_collision_enabled.map(|value| !value))
     }
 
-    pub fn add_extra_playlist_vars(mut self, playlist_vars: HashMap<String, String>) -> Self {
+    pub fn add_extra_playlist_vars(mut self, playlist_vars: LinkedHashMap<String, String>) -> Self {
         self.playlist_vars.extend(playlist_vars);
         self
     }
 
-    pub fn add_extra_vars(mut self, extra_vars: HashMap<String, String>) -> Self {
+    pub fn add_extra_vars(mut self, extra_vars: LinkedHashMap<String, String>) -> Self {
         for (key, value) in extra_vars.into_iter() {
             self.kv_args.insert(format!("+{}", key), value);
         }

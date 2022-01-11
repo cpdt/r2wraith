@@ -1,5 +1,6 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashSet};
 use std::ops::RangeInclusive;
+use linked_hash_map::LinkedHashMap;
 use serde::Deserialize;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -169,8 +170,8 @@ pub struct FilledGameConfig {
     pub default_map: Option<String>,
     pub playlist_overrides: PlaylistOverrides,
 
-    pub extra_playlist_vars: HashMap<String, String>,
-    pub extra_vars: HashMap<String, String>,
+    pub extra_playlist_vars: LinkedHashMap<String, String>,
+    pub extra_vars: LinkedHashMap<String, String>,
     pub extra_args: Vec<String>,
 }
 
@@ -206,10 +207,10 @@ pub struct GameConfig {
     pub playlist_overrides: PlaylistOverrides,
 
     #[serde(default)]
-    pub extra_playlist_vars: HashMap<String, String>,
+    pub extra_playlist_vars: LinkedHashMap<String, String>,
 
     #[serde(default)]
-    pub extra_vars: HashMap<String, String>,
+    pub extra_vars: LinkedHashMap<String, String>,
 
     #[serde(default)]
     pub extra_args: Vec<String>,
@@ -346,7 +347,7 @@ pub struct Config {
     #[serde(default)]
     pub defaults: GameConfig,
 
-    pub servers: HashMap<String, InstanceConfig>,
+    pub servers: LinkedHashMap<String, InstanceConfig>,
 }
 
 fn default_poll_seconds() -> f64 {
