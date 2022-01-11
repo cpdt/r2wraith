@@ -95,11 +95,18 @@ all servers.
 
 #### `update-rate`
 
- - Sets the update rate for the server, i.e the rate that the server sends updates to clients. Clients will need to set
-   the `cl_updaterate_mp` convar to benefit from increased update rates. Sets the `sv_updaterate_mp`,
+ - Sets the desired update rate for the server, i.e the rate that the server sends updates to clients. Clients will need
+   to set the `cl_updaterate_mp` convar to benefit from increased update rates. Sets the `sv_updaterate_mp`,
    `sv_minupdaterate` and `sv_max_snapshots_multiplayer` convars.
  - Default: `20`
  - Example: `update-rate = 60`
+
+#### `min-update-rate`
+
+ - Sets the minimum update rate for the server, if the server can't maintain sending updates at this rate it will
+   throttle ticks to a point where it can. Sets the `sv_minupdaterate` convar.
+ - Default: `20`
+ - Example: `min-update-rate = 20`
 
 #### `timescale`
 

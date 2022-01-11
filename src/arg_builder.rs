@@ -134,8 +134,11 @@ impl ArgBuilder {
 
     pub fn set_update_rate(self, update_rate: u32) -> Self {
         self.set_kv("+sv_updaterate_mp", update_rate)
-            .set_kv("+sv_minupdaterate", update_rate)
             .set_kv("+sv_max_snapshots_multiplayer", update_rate * 15)
+    }
+
+    pub fn set_min_update_rate(self, min_update_rate: u32) -> Self {
+        self.set_kv("+sv_minupdaterate", min_update_rate)
     }
 
     pub fn set_report_to_master(self, report_to_master: bool) -> Self {
