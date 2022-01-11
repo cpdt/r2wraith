@@ -2,8 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::net::{Ipv4Addr, SocketAddrV4};
-use std::ops::RangeInclusive;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use bollard::container::{CreateContainerOptions};
 use bollard::Docker;
 use bollard::models::{ContainerInspectResponse, ContainerState, HostConfig, PortBinding};
@@ -16,10 +15,6 @@ use crate::config::FilledInstanceConfig;
 
 #[derive(Debug)]
 enum StartServerError {
-    SpecificAuthPortInUse(u16),
-    NoAuthPortsAvailable(RangeInclusive<u16>),
-    SpecificGamePortInUse(u16),
-    NoGamePortsAvailable(RangeInclusive<u16>),
     ContainerCrashedWhileStarting,
     ContainerHasNoIp,
 }
@@ -27,10 +22,6 @@ enum StartServerError {
 impl Display for StartServerError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            StartServerError::SpecificAuthPortInUse(port) => write!(f, "Specified auth port {} is not free", port),
-            StartServerError::NoAuthPortsAvailable(ports) => write!(f, "No auth ports between {} and {} are free", ports.start(), ports.end()),
-            StartServerError::SpecificGamePortInUse(port) => write!(f, "Specified game port {} is not free", port),
-            StartServerError::NoGamePortsAvailable(ports) => write!(f, "No game ports between {} and {} are free", ports.start(), ports.end()),
             StartServerError::ContainerCrashedWhileStarting => write!(f, "The container crashed while initializing"),
             StartServerError::ContainerHasNoIp => write!(f, "The container was not assigned an IP address"),
         }
@@ -86,6 +77,112 @@ impl Server {
             state: ServerState::NotRunning,
             is_old: false,
         }
+    }
+
+    pub async fn start(
+        &mut self,
+        auth_port: u16,
+        game_port: u16,
+        config: &Config,
+        docker: &Docker
+    ) -> Result<(), Box<dyn Error>> {
+        let mut env_vars = Vec::new();
+        ArgBuilder::new()
+            .set_name(self.name.clone())
+            .set_auth_port(auth_port)
+            .set_game_port(game_port)
+            .set_game_config(self.config.game_config.clone())
+            .build(&mut env_vars);
+
+        info!("Starting {} with auth port {} and game port {}", self.name, auth_port, game_port);
+        debug!("Environment variables:");
+        for env_var in &env_vars {
+            debug!("  {}", env_var);
+        }
+
+        let container_config = bollard::container::Config {
+            image: Some(config.docker_image.clone()),
+            attach_stdout: Some(true),
+            attach_stderr: Some(true),
+            env: Some(env_vars),
+            exposed_ports: Some([
+                (format!("{}/tcp", auth_port), HashMap::new()),
+                (format!("{}/udp", game_port), HashMap::new()),
+            ].into_iter().collect()),
+            host_config: Some(HostConfig {
+                binds: Some(vec![format!("{}:/mnt/titanfall:ro", config.game_dir)]),
+                port_bindings: Some([
+                    (format!("{}/tcp", auth_port), Some(vec![PortBinding {
+                        host_ip: None,
+                        host_port: Some(auth_port.to_string()),
+                    }])),
+                    (format!("{}/udp", game_port), Some(vec![PortBinding {
+                        host_ip: None,
+                        host_port: Some(game_port.to_string()),
+                    }])),
+                ].into_iter().collect()),
+                auto_remove: Some(true),
+
+                memory: self.config.game_config.perf_memory_limit_bytes,
+                memory_swap: self.config.game_config.perf_virtual_memory_limit_bytes,
+                cpu_period: self.config.game_config.perf_cpus.map(|_| 100000),
+                cpu_quota: self.config.game_config.perf_cpus.map(|cpus| (cpus * 100000.) as i64),
+                cpuset_cpus: self.config.game_config.perf_cpu_set.clone(),
+
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let create_response = docker
+            .create_container(Some(CreateContainerOptions {
+                name: format!("r2wraith-{}", self.name)
+            }), container_config)
+            .await?;
+        if !create_response.warnings.is_empty() {
+            for warning in &create_response.warnings {
+                warn!("{}", warning);
+            }
+        }
+
+        let container_id = create_response.id;
+        docker.start_container::<String>(&container_id, None).await?;
+
+        let inspect_response = docker.inspect_container(&container_id, None)
+            .await
+            .ok();
+        let container_ip = inspect_response
+            .as_ref()
+            .and_then(get_container_ip_address)
+            .and_then(|ip| ip.parse::<Ipv4Addr>().ok())
+            .ok_or(StartServerError::ContainerHasNoIp)?;
+        let container_auth_address = SocketAddrV4::new(container_ip, auth_port);
+
+        info!("Server {} is starting...", self.name);
+        let now = Instant::now();
+
+        // Wait for the auth server to start on the required port
+        loop {
+            debug!("Waiting for {} to be ready...", self.name);
+            tokio::time::sleep(Duration::from_secs(5)).await;
+
+            // Ensure the container is still running so we don't get stuck in an infinite loop
+            if !is_container_running(&container_id, docker).await {
+                return Err(Box::new(StartServerError::ContainerCrashedWhileStarting));
+            }
+
+            if let Ok(_) = TcpStream::connect(container_auth_address).await {
+                break;
+            }
+        }
+
+        info!("Server {} has started in {}s", self.name, now.elapsed().as_secs_f64());
+
+        self.state = ServerState::Running(RunningServer {
+            container_id,
+            auth_port,
+            game_port,
+        });
+        Ok(())
     }
 
     pub async fn stop(&mut self, docker: &Docker) {
@@ -195,8 +292,7 @@ impl ServerCluster {
     }
 
     pub async fn poll(&mut self, config: &Config, docker: &Docker) -> PollStatus {
-        let mut status = PollStatus::NoWork;
-        let restart_servers_futures = self.servers.iter().enumerate().map(|(server_index, server)| async move {
+        let restart_servers_futures = self.servers.iter_mut().enumerate().map(|(server_index, server)| async move {
             let running_server = match &server.state {
                 ServerState::Running(running_server) => running_server,
                 ServerState::NotRunning => return Some(server_index),
@@ -218,166 +314,106 @@ impl ServerCluster {
             };
 
             if let Err(why) = TcpStream::connect(SocketAddrV4::new(container_ip, running_server.auth_port)).await {
-                warn!("Server {} appears to have stopped (can't connect to auth server: {})", server.name, why);
-                return Some(server_index);
+                warn!("Server {} appears to have frozen (can't connect to auth server: {})", server.name, why);
+                server.stop(docker).await;
+                if let ServerState::NotRunning = &server.state {
+                    return Some(server_index);
+                }
             }
 
             return None;
         });
 
-        let restart_servers = futures::future::join_all(restart_servers_futures)
-            .await
+        let restart_server_indices = futures::future::join_all(restart_servers_futures).await;
+        let (mut auth_ports_in_use, mut game_ports_in_use): (HashSet<_>, HashSet<_>) =
+            self
+                .servers
+                .iter()
+                .filter_map(|server| match &server.state {
+                    ServerState::NotRunning => None,
+                    ServerState::Running(RunningServer { auth_port, game_port, .. }) => Some((*auth_port, *game_port))
+                })
+                .unzip();
+
+        struct RestartServerDetails {
+            auth_port: u16,
+            game_port: u16,
+        }
+        let restart_server_details = restart_server_indices
             .into_iter()
-            .filter_map(|server| server);
-        for server_index in restart_servers {
-            let server = &mut self.servers[server_index];
+            .filter_map(|index| index)
+            .filter_map(|server_index| {
+                let server = &self.servers[server_index];
 
-            // Be extra sure that the container is stopped
-            if let ServerState::Running(running_server) = &server.state {
-                match docker.stop_container(&running_server.container_id, None).await {
-                    Ok(()) => debug!("Stopped container {}", running_server.container_id),
-                    Err(why) => warn!("Failed to stop container {}: {}", running_server.container_id, why),
-                }
-            }
-            server.state = ServerState::NotRunning;
+                // Allocate free ports
+                let auth_port = match server.config.auth_port {
+                    Some(port) if !auth_ports_in_use.contains(&port) => port,
+                    Some(used_port) => {
+                        error!("Specified auth port {} is not free", used_port);
+                        return None;
+                    }
+                    None => match config
+                        .auth_ports
+                        .clone()
+                        .into_iter()
+                        .find(|port| !auth_ports_in_use.contains(port)) {
+                        Some(port) => port,
+                        None => {
+                            error!("No auth ports between {} and {} are free", config.auth_ports.start(), config.auth_ports.end());
+                            return None;
+                        }
+                    }
+                };
+                let game_port = match server.config.game_port {
+                    Some(port) if !game_ports_in_use.contains(&port) => port,
+                    Some(used_port) => {
+                        error!("Specified game port {} is not free", used_port);
+                        return None;
+                    }
+                    None => match config
+                        .game_ports
+                        .clone()
+                        .into_iter()
+                        .find(|port| !game_ports_in_use.contains(port)) {
+                        Some(port) => port,
+                        None => {
+                            error!("No game ports between {} and {} are free", config.game_ports.start(), config.game_ports.end());
+                            return None;
+                        }
+                    }
+                };
 
-            let server = &self.servers[server_index];
-            if let ServerState::NotRunning = server.state {
-                status = PollStatus::DidWork;
-                let start_res = self.start_server(&server.name, &server.config, config, docker).await;
-                match start_res {
-                    Ok(running_server) => self.servers[server_index].state = ServerState::Running(running_server),
-                    Err(why) => error!("Could not start {}: {}", server.name, why),
-                }
-            }
+                // Ensure other servers can't use these ports
+                auth_ports_in_use.insert(auth_port);
+                game_ports_in_use.insert(game_port);
+
+                Some((
+                    server_index,
+                    RestartServerDetails {
+                        auth_port,
+                        game_port,
+                    }
+                ))
+            })
+            .collect::<HashMap<_, _>>();
+
+        if restart_server_details.is_empty() {
+            return PollStatus::NoWork;
         }
 
-        status
-    }
+        let restart_server_details = &restart_server_details;
+        let start_server_futures = self.servers.iter_mut().enumerate().map(|(server_index, server)| async move {
+            let details = match restart_server_details.get(&server_index) {
+                Some(details) => details,
+                None => return,
+            };
 
-    async fn start_server(&self, name: &str, instance_config: &FilledInstanceConfig, config: &Config, docker: &Docker) -> Result<RunningServer, Box<dyn Error>> {
-        let (auth_ports_in_use, game_ports_in_use): (HashSet<_>, HashSet<_>) = self.servers.iter().filter_map(|server| match &server.state {
-            ServerState::NotRunning => None,
-            ServerState::Running(RunningServer { auth_port, game_port, .. }) => Some((*auth_port, *game_port))
-        }).unzip();
-
-        let auth_port = match instance_config.auth_port {
-            Some(port) if !auth_ports_in_use.contains(&port) => port,
-            Some(used_port) => return Err(Box::new(StartServerError::SpecificAuthPortInUse(used_port))),
-            None => {
-                config.auth_ports
-                    .clone()
-                    .into_iter()
-                    .find(|port| !auth_ports_in_use.contains(port))
-                    .ok_or(Box::new(StartServerError::NoAuthPortsAvailable(config.auth_ports.clone())))?
+            if let Err(why) = server.start(details.auth_port, details.game_port, config, docker).await {
+                error!("Could not start {}: {}", server.name, why);
             }
-        };
-
-        let game_port = match instance_config.game_port {
-            Some(port) if !game_ports_in_use.contains(&port) => port,
-            Some(used_port) => return Err(Box::new(StartServerError::SpecificGamePortInUse(used_port))),
-            None => {
-                config.game_ports
-                    .clone()
-                    .into_iter()
-                    .find(|port| !game_ports_in_use.contains(port))
-                    .ok_or(Box::new(StartServerError::NoGamePortsAvailable(config.game_ports.clone())))?
-            }
-        };
-
-        let mut env_vars = Vec::new();
-        ArgBuilder::new()
-            .set_name(instance_config.name.clone())
-            .set_auth_port(auth_port)
-            .set_game_port(game_port)
-            .set_game_config(instance_config.game_config.clone())
-            .build(&mut env_vars);
-
-        info!("Starting {} with auth port {} and game port {}", name, auth_port, game_port);
-        debug!("Environment variables:");
-        for env_var in &env_vars {
-            debug!("  {}", env_var);
-        }
-
-        let container_config = bollard::container::Config {
-            image: Some(config.docker_image.clone()),
-            attach_stdout: Some(true),
-            attach_stderr: Some(true),
-            env: Some(env_vars),
-            exposed_ports: Some([
-                (format!("{}/tcp", auth_port), HashMap::new()),
-                (format!("{}/udp", game_port), HashMap::new()),
-            ].into_iter().collect()),
-            host_config: Some(HostConfig {
-                binds: Some(vec![format!("{}:/mnt/titanfall:ro", config.game_dir)]),
-                port_bindings: Some([
-                    (format!("{}/tcp", auth_port), Some(vec![PortBinding {
-                        host_ip: None,
-                        host_port: Some(auth_port.to_string()),
-                    }])),
-                    (format!("{}/udp", game_port), Some(vec![PortBinding {
-                        host_ip: None,
-                        host_port: Some(game_port.to_string()),
-                    }])),
-                ].into_iter().collect()),
-                auto_remove: Some(true),
-
-                memory: instance_config.game_config.perf_memory_limit_bytes,
-                memory_swap: instance_config.game_config.perf_virtual_memory_limit_bytes,
-                cpu_period: instance_config.game_config.perf_cpus.map(|_| 100000),
-                cpu_quota: instance_config.game_config.perf_cpus.map(|cpus| (cpus * 100000.) as i64),
-                cpuset_cpus: instance_config.game_config.perf_cpu_set.clone(),
-
-                ..Default::default()
-            }),
-            ..Default::default()
-        };
-        let create_response = docker
-            .create_container(Some(CreateContainerOptions {
-                name: format!("r2wraith-{}", name)
-            }), container_config)
-            .await?;
-        if !create_response.warnings.is_empty() {
-            for warning in &create_response.warnings {
-                warn!("{}", warning);
-            }
-        }
-
-        let container_id = create_response.id;
-        docker.start_container::<String>(&container_id, None).await?;
-
-        let inspect_response = docker.inspect_container(&container_id, None)
-            .await
-            .ok();
-        let container_ip = inspect_response
-            .as_ref()
-            .and_then(get_container_ip_address)
-            .and_then(|ip| ip.parse::<Ipv4Addr>().ok())
-            .ok_or(StartServerError::ContainerHasNoIp)?;
-        let container_auth_address = SocketAddrV4::new(container_ip, auth_port);
-
-        info!("Server {} has started with container {}", name, container_id);
-
-        // Wait for the auth server to start on the required port
-        loop {
-            debug!("Waiting for server to be ready...");
-            tokio::time::sleep(Duration::from_secs(5)).await;
-
-            // Ensure the container is still running so we don't get stuck in an infinite loop
-            if !is_container_running(&container_id, docker).await {
-                return Err(Box::new(StartServerError::ContainerCrashedWhileStarting));
-            }
-
-            if let Ok(_) = TcpStream::connect(container_auth_address).await {
-                break;
-            }
-        }
-
-        Ok(RunningServer {
-            container_id,
-            auth_port,
-            game_port,
-        })
+        });
+        futures::future::join_all(start_server_futures).await;
+        PollStatus::DidWork
     }
 }
 
