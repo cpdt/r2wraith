@@ -292,6 +292,7 @@ impl ArgBuilder {
             .set_password(game_config.password)
             .set_tick_rate(game_config.tick_rate)
             .set_update_rate(game_config.update_rate)
+            .set_min_update_rate(game_config.min_update_rate)
             .set_report_to_master(game_config.report_to_master)
             .set_master_url(game_config.master_url)
             .set_allow_insecure(game_config.allow_insecure)
