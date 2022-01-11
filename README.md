@@ -122,6 +122,12 @@ all servers.
  - Default: `true`
  - Example: `report-to-master = false`
 
+#### `master-url`
+
+ - The URL of the master server, only used if `report-to-master` is true. Sets the `ns_masterserver_hostname` convar.
+ - Default: `"https://northstar.tf"`
+ - Example: `master-url = "https://my.custom.master.com"`
+
 #### `allow-insecure`
 
  - Whether to allow players to join without master server auth/persistence. You probably don't want to change this.

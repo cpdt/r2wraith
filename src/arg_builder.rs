@@ -145,6 +145,10 @@ impl ArgBuilder {
         self.set_kv_env("NS_MASTERSERVER_REGISTER", report_to_master)
     }
 
+    pub fn set_master_url(self, master_url: String) -> Self {
+        self.set_kv_env("NS_MASTERSERVER_URL", master_url)
+    }
+
     pub fn set_allow_insecure(self, allow_insecure: bool) -> Self {
         self.set_kv_env("NS_INSECURE", allow_insecure)
     }
@@ -289,6 +293,7 @@ impl ArgBuilder {
             .set_tick_rate(game_config.tick_rate)
             .set_update_rate(game_config.update_rate)
             .set_report_to_master(game_config.report_to_master)
+            .set_master_url(game_config.master_url)
             .set_allow_insecure(game_config.allow_insecure)
             .set_use_sockets_for_loopback(game_config.use_sockets_for_loopback)
             .set_everything_unlocked(game_config.everything_unlocked)
