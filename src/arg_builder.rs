@@ -266,8 +266,8 @@ impl ArgBuilder {
             .set_playlist_var("respawn_delay", playlist_overrides.pilot_respawn_delay)
             .set_playlist_var("boosts_enabled", playlist_overrides.pilot_boosts_enabled.map(|value| !value)) // backwards apparently?
             .set_playlist_var("earn_meter_pilot_overdrive", playlist_overrides.pilot_boost_meter_overdrive.map(|value| match value {
-                BoostMeterOverdrive::Enabled => 0,
-                BoostMeterOverdrive::Disabled => 1,
+                BoostMeterOverdrive::Disabled => 0,
+                BoostMeterOverdrive::Enabled => 1,
                 BoostMeterOverdrive::Only => 2,
             }))
             .set_playlist_var("earn_meter_pilot_multiplier", playlist_overrides.pilot_boost_meter_multiplier)
