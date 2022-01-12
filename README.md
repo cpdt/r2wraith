@@ -180,6 +180,12 @@ all servers.
  - Default: `15`
  - Example: `countdown-length-seconds = 30`
 
+#### `mods-dir`
+
+ - Path to a directory of mods to install on the server, relative to the config file.
+ - Default: not set
+ - Example: `mods-dir = "/mods"`
+ 
 #### `graphics-mode`
 
  - Allows enabling software rendering for true-headless dedicated servers.

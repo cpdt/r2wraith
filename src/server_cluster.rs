@@ -100,6 +100,11 @@ impl Server {
             debug!("  {}", env_var);
         }
 
+        let mut binds = vec![format!("{}:/mnt/titanfall:ro", config.game_dir)];
+        if let Some(mods_dir) = &self.config.game_config.mods_dir {
+            binds.push(format!("{}:/mnt/mods:ro", mods_dir));
+        }
+
         let container_config = bollard::container::Config {
             image: Some(config.docker_image.clone()),
             attach_stdout: Some(true),
@@ -110,7 +115,7 @@ impl Server {
                 (format!("{}/udp", game_port), HashMap::new()),
             ].into_iter().collect()),
             host_config: Some(HostConfig {
-                binds: Some(vec![format!("{}:/mnt/titanfall:ro", config.game_dir)]),
+                binds: Some(binds),
                 port_bindings: Some([
                     (format!("{}/tcp", auth_port), Some(vec![PortBinding {
                         host_ip: None,

@@ -159,6 +159,7 @@ pub struct FilledGameConfig {
     pub only_host_can_start: bool,
     pub countdown_length_seconds: u32,
 
+    pub mods_dir: Option<String>,
     pub graphics_mode: GraphicsMode,
     pub perf_memory_limit_bytes: Option<i64>,
     pub perf_virtual_memory_limit_bytes: Option<i64>,
@@ -195,6 +196,7 @@ pub struct GameConfig {
     pub only_host_can_start: Option<bool>,
     pub countdown_length_seconds: Option<u32>,
 
+    pub mods_dir: Option<String>,
     pub graphics_mode: Option<GraphicsMode>,
     pub perf_memory_limit_bytes: Option<i64>,
     pub perf_virtual_memory_limit_bytes: Option<i64>,
@@ -247,6 +249,7 @@ impl GameConfig {
             only_host_can_start: self.only_host_can_start.or(other.only_host_can_start),
             countdown_length_seconds: self.countdown_length_seconds.or(other.countdown_length_seconds),
 
+            mods_dir: self.mods_dir.or(other.mods_dir),
             graphics_mode: self.graphics_mode.or(other.graphics_mode),
             perf_memory_limit_bytes: self.perf_memory_limit_bytes.or(other.perf_memory_limit_bytes),
             perf_virtual_memory_limit_bytes: self.perf_virtual_memory_limit_bytes.or(other.perf_virtual_memory_limit_bytes),
@@ -286,6 +289,7 @@ impl Into<FilledGameConfig> for GameConfig {
             only_host_can_start: self.only_host_can_start.unwrap_or(false),
             countdown_length_seconds: self.countdown_length_seconds.unwrap_or(15),
 
+            mods_dir: self.mods_dir,
             graphics_mode: self.graphics_mode.unwrap_or(GraphicsMode::Default),
             perf_memory_limit_bytes: self.perf_memory_limit_bytes,
             perf_virtual_memory_limit_bytes: self.perf_virtual_memory_limit_bytes,

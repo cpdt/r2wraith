@@ -71,13 +71,24 @@ async fn main() {
         }
     };
 
+    let config_dir = full_config_path.parent().unwrap();
+
     // Change the titanfall path to be relative to the config file
-    config.game_dir = full_config_path
-        .parent()
-        .unwrap()
+    config.game_dir = config_dir
         .join(config.game_dir)
         .to_string_lossy()
         .to_string();
+
+    // Change all server mod dirs to be relative to the config file
+    for (_, server_config) in &mut config.servers {
+        if let Some(mods_dir) = &mut server_config.game_config.mods_dir {
+            let old_mods_dir = std::mem::take(mods_dir);
+            *mods_dir = config_dir
+                .join(old_mods_dir)
+                .to_string_lossy()
+                .to_string();
+        }
+    }
 
     let restore_serialized_servers = match load_serialized_servers(&restore_file_path) {
         Ok(servers) => {
