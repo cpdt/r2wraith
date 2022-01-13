@@ -306,6 +306,7 @@ impl ServerCluster {
             let details = match docker.inspect_container(&running_server.container_id, None).await.ok() {
                 None | Some(ContainerInspectResponse { state: None | Some(ContainerState { running: None | Some(false), .. }), .. }) => {
                     warn!("Server {} appears to have stopped (container {} is no longer running)", server.name, running_server.container_id);
+                    server.state = ServerState::NotRunning;
                     return Some(server_index);
                 }
                 Some(details) => details,
