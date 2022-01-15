@@ -1,5 +1,6 @@
 use std::collections::{HashSet};
 use std::ops::RangeInclusive;
+use std::path::Path;
 use linked_hash_map::LinkedHashMap;
 use serde::Deserialize;
 
@@ -160,6 +161,7 @@ pub struct FilledGameConfig {
     pub countdown_length_seconds: u32,
 
     pub mods_dir: Option<String>,
+    pub logs_dir: String,
     pub graphics_mode: GraphicsMode,
     pub perf_memory_limit_bytes: Option<i64>,
     pub perf_virtual_memory_limit_bytes: Option<i64>,
@@ -197,6 +199,7 @@ pub struct GameConfig {
     pub countdown_length_seconds: Option<u32>,
 
     pub mods_dir: Option<String>,
+    pub logs_dir: Option<String>,
     pub graphics_mode: Option<GraphicsMode>,
     pub perf_memory_limit_bytes: Option<i64>,
     pub perf_virtual_memory_limit_bytes: Option<i64>,
@@ -250,6 +253,7 @@ impl GameConfig {
             countdown_length_seconds: self.countdown_length_seconds.or(other.countdown_length_seconds),
 
             mods_dir: self.mods_dir.or(other.mods_dir),
+            logs_dir: self.logs_dir.or(other.logs_dir),
             graphics_mode: self.graphics_mode.or(other.graphics_mode),
             perf_memory_limit_bytes: self.perf_memory_limit_bytes.or(other.perf_memory_limit_bytes),
             perf_virtual_memory_limit_bytes: self.perf_virtual_memory_limit_bytes.or(other.perf_virtual_memory_limit_bytes),
@@ -269,10 +273,8 @@ impl GameConfig {
             extra_args,
         }
     }
-}
 
-impl Into<FilledGameConfig> for GameConfig {
-    fn into(self) -> FilledGameConfig {
+    pub fn fill(self, server_name: &str, config_dir: &Path) -> FilledGameConfig {
         FilledGameConfig {
             description: self.description.unwrap_or("Your favourite R2Wraith server".to_string()),
             password: self.password.unwrap_or("".to_string()),
@@ -289,7 +291,11 @@ impl Into<FilledGameConfig> for GameConfig {
             only_host_can_start: self.only_host_can_start.unwrap_or(false),
             countdown_length_seconds: self.countdown_length_seconds.unwrap_or(15),
 
-            mods_dir: self.mods_dir,
+            mods_dir: self.mods_dir.map(|mods_dir| config_dir.join(mods_dir).to_string_lossy().to_string()),
+            logs_dir: config_dir
+                .join(self.logs_dir.unwrap_or_else(|| format!("r2wraith-logs/{}", server_name)))
+                .to_string_lossy()
+                .to_string(),
             graphics_mode: self.graphics_mode.unwrap_or(GraphicsMode::Default),
             perf_memory_limit_bytes: self.perf_memory_limit_bytes,
             perf_virtual_memory_limit_bytes: self.perf_virtual_memory_limit_bytes,
@@ -331,12 +337,13 @@ pub struct InstanceConfig {
 }
 
 impl InstanceConfig {
-    pub fn make_filled(self, default_game_config: GameConfig) -> FilledInstanceConfig {
+    pub fn make_filled(self, id: &str, default_game_config: GameConfig, config_dir: &Path) -> FilledInstanceConfig {
+        let game_config = self.game_config.or(default_game_config).fill(&id, config_dir);
         FilledInstanceConfig {
             name: self.name,
             auth_port: self.auth_port,
             game_port: self.game_port,
-            game_config: self.game_config.or(default_game_config).into(),
+            game_config,
         }
     }
 }

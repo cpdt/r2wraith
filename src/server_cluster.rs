@@ -50,7 +50,7 @@ pub enum ServerState {
 
 #[derive(Debug)]
 pub struct Server {
-    pub name: String,
+    pub id: String,
     pub config: FilledInstanceConfig,
     pub state: ServerState,
     pub is_old: bool,
@@ -70,9 +70,9 @@ pub struct ServerCluster {
 }
 
 impl Server {
-    pub fn new(name: String, config: FilledInstanceConfig) -> Self {
+    pub fn new(id: String, config: FilledInstanceConfig) -> Self {
         Server {
-            name,
+            id,
             config,
             state: ServerState::NotRunning,
             is_old: false,
@@ -86,6 +86,11 @@ impl Server {
         config: &Config,
         docker: &Docker
     ) -> Result<(), Box<dyn Error>> {
+        // Ensure the log directory exists
+        if let Err(why) = tokio::fs::create_dir_all(&self.config.game_config.logs_dir).await {
+            warn!("Failed to create log directory {}: {}", self.config.game_config.logs_dir, why);
+        }
+
         let mut env_vars = Vec::new();
         ArgBuilder::new()
             .set_name(self.config.name.clone())
@@ -94,13 +99,16 @@ impl Server {
             .set_game_config(self.config.game_config.clone())
             .build(&mut env_vars);
 
-        info!("Starting {} with auth port {} and game port {}", self.name, auth_port, game_port);
+        info!("Starting {} with auth port {} and game port {}", self.id, auth_port, game_port);
         debug!("Environment variables:");
         for env_var in &env_vars {
             debug!("  {}", env_var);
         }
 
-        let mut binds = vec![format!("{}:/mnt/titanfall:ro", config.game_dir)];
+        let mut binds = vec![
+            format!("{}:/mnt/titanfall", config.game_dir),
+            format!("{}:/mnt/titanfall/R2Northstar/logs", self.config.game_config.logs_dir),
+        ];
         if let Some(mods_dir) = &self.config.game_config.mods_dir {
             binds.push(format!("{}:/mnt/mods:ro", mods_dir));
         }
@@ -140,7 +148,7 @@ impl Server {
         };
         let create_response = docker
             .create_container(Some(CreateContainerOptions {
-                name: format!("r2wraith-{}", self.name)
+                name: format!("r2wraith-{}", self.id)
             }), container_config)
             .await?;
         if !create_response.warnings.is_empty() {
@@ -162,12 +170,12 @@ impl Server {
             .ok_or(StartServerError::ContainerHasNoIp)?;
         let container_auth_address = SocketAddrV4::new(container_ip, auth_port);
 
-        info!("Server {} is starting...", self.name);
+        info!("Server {} is starting...", self.id);
         let now = Instant::now();
 
         // Wait for the auth server to start on the required port
         loop {
-            debug!("Waiting for {} to be ready...", self.name);
+            debug!("Waiting for {} to be ready...", self.id);
             tokio::time::sleep(Duration::from_secs(5)).await;
 
             // Ensure the container is still running so we don't get stuck in an infinite loop
@@ -180,7 +188,7 @@ impl Server {
             }
         }
 
-        info!("Server {} has started in {}s", self.name, now.elapsed().as_secs_f64());
+        info!("Server {} has started in {}s", self.id, now.elapsed().as_secs_f64());
 
         self.state = ServerState::Running(RunningServer {
             container_id,
@@ -193,9 +201,9 @@ impl Server {
     pub async fn stop(&mut self, docker: &Docker) {
         if let ServerState::Running(running_server) = &self.state {
             match docker.stop_container(&running_server.container_id, None).await {
-                Ok(()) => info!("Stopped {}", self.name),
+                Ok(()) => info!("Stopped {}", self.id),
                 Err(why) => {
-                    error!("Failed to stop {}: {}", self.name, why);
+                    error!("Failed to stop {}: {}", self.id, why);
                     return;
                 }
             }
@@ -210,22 +218,22 @@ impl ServerCluster {
     }
 
     pub fn get_mut(&mut self, name: &str) -> Option<&mut Server> {
-        self.servers.iter_mut().find(|server| server.name == name)
+        self.servers.iter_mut().find(|server| server.id == name)
     }
 
     pub fn load_servers(&mut self, mut new_servers: Vec<Server>) {
         for new_server in &mut new_servers {
             // Try to match this up with an existing server
-            match self.servers.iter_mut().find(|server| server.name == new_server.name) {
+            match self.servers.iter_mut().find(|server| server.id == new_server.id) {
                 Some(matching_server) => {
                     // Carry the state across from the old server
                     std::mem::swap(&mut new_server.state, &mut matching_server.state);
 
                     if new_server.config != matching_server.config {
-                        warn!("Server {} config has changed, this will only apply the next time the server is started", new_server.name);
+                        warn!("Server {} config has changed, this will only apply the next time the server is started", new_server.id);
                     }
                 },
-                None => debug!("Loaded new server {}", new_server.name),
+                None => debug!("Loaded new server {}", new_server.id),
             }
         }
 
@@ -233,7 +241,7 @@ impl ServerCluster {
         std::mem::swap(&mut old_servers, &mut self.servers);
         for mut old_server in old_servers {
             if let ServerState::Running { .. } = &old_server.state {
-                warn!("Server {} is no longer in the config, use the \"stopold\" command to stop it", old_server.name);
+                warn!("Server {} is no longer in the config, use the \"stopold\" command to stop it", old_server.id);
 
                 old_server.is_old = true;
                 self.servers.push(old_server);
@@ -262,7 +270,7 @@ impl ServerCluster {
             .iter()
             .filter_map(|server| match &server.state {
                 ServerState::Running(RunningServer { container_id, auth_port, game_port }) => Some(SerializedServer {
-                    name: server.name.clone(),
+                    name: server.id.clone(),
                     container_id: container_id.to_string(),
                     auth_port: *auth_port,
                     game_port: *game_port,
@@ -287,7 +295,7 @@ impl ServerCluster {
                 continue;
             }
 
-            debug!("Restored {} with container {}", matching_server.name, serialized_server.container_id);
+            debug!("Restored {} with container {}", matching_server.id, serialized_server.container_id);
             matching_server.state = ServerState::Running(RunningServer {
                 container_id: serialized_server.container_id.clone(),
                 auth_port: serialized_server.auth_port,
@@ -305,7 +313,7 @@ impl ServerCluster {
 
             let details = match docker.inspect_container(&running_server.container_id, None).await.ok() {
                 None | Some(ContainerInspectResponse { state: None | Some(ContainerState { running: None | Some(false), .. }), .. }) => {
-                    warn!("Server {} appears to have stopped (container {} is no longer running)", server.name, running_server.container_id);
+                    warn!("Server {} appears to have stopped (container {} is no longer running)", server.id, running_server.container_id);
                     server.state = ServerState::NotRunning;
                     return Some(server_index);
                 }
@@ -314,13 +322,13 @@ impl ServerCluster {
             let container_ip = match get_container_ip_address(&details).and_then(|address| address.parse::<Ipv4Addr>().ok()) {
                 Some(ip) => ip,
                 None => {
-                    warn!("Failed to get local IP address of {}, not doing port check", server.name);
+                    warn!("Failed to get local IP address of {}, not doing port check", server.id);
                     return None;
                 }
             };
 
             if let Err(why) = TcpStream::connect(SocketAddrV4::new(container_ip, running_server.auth_port)).await {
-                warn!("Server {} appears to have frozen (can't connect to auth server: {})", server.name, why);
+                warn!("Server {} appears to have frozen (can't connect to auth server: {})", server.id, why);
                 server.stop(docker).await;
                 if let ServerState::NotRunning = &server.state {
                     return Some(server_index);
@@ -415,7 +423,7 @@ impl ServerCluster {
             };
 
             if let Err(why) = server.start(details.auth_port, details.game_port, config, docker).await {
-                error!("Could not start {}: {}", server.name, why);
+                error!("Could not start {}: {}", server.id, why);
             }
         });
         futures::future::join_all(start_server_futures).await;

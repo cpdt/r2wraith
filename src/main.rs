@@ -71,7 +71,7 @@ async fn main() {
         }
     };
 
-    let config_dir = full_config_path.parent().unwrap();
+    let config_dir = full_config_path.parent().unwrap().to_path_buf();
 
     // Change the titanfall path to be relative to the config file
     config.game_dir = config_dir
@@ -80,7 +80,7 @@ async fn main() {
         .to_string();
 
     // Change all server mod dirs to be relative to the config file
-    for (_, server_config) in &mut config.servers {
+    /*for (_, server_config) in &mut config.servers {
         if let Some(mods_dir) = &mut server_config.game_config.mods_dir {
             let old_mods_dir = std::mem::take(mods_dir);
             *mods_dir = config_dir
@@ -88,7 +88,7 @@ async fn main() {
                 .to_string_lossy()
                 .to_string();
         }
-    }
+    }*/
 
     let restore_serialized_servers = match load_serialized_servers(&restore_file_path) {
         Ok(servers) => {
@@ -106,7 +106,7 @@ async fn main() {
     };
 
     let mut server_cluster = ServerCluster::new();
-    server_cluster.load_servers(get_server_list_from_config(&config));
+    server_cluster.load_servers(get_server_list_from_config(&config, &config_dir));
     server_cluster.deserialize(restore_serialized_servers, &docker).await;
 
     server_cluster.poll(&config, &docker).await;
@@ -206,7 +206,7 @@ async fn main() {
                         continue;
                     }
                 };
-                let new_servers = get_server_list_from_config(&new_config);
+                let new_servers = get_server_list_from_config(&new_config, &config_dir);
                 repl_sender.send(ReplCommand::SetServers(new_servers)).unwrap();
             } else if command == "stopold" {
                 repl_sender.send(ReplCommand::StopOld).unwrap();
@@ -232,9 +232,9 @@ fn store_serialized_servers(restore_path: &Path, server_cluster: &ServerCluster)
     Ok(())
 }
 
-fn get_server_list_from_config(config: &Config) -> Vec<Server> {
-    config.servers.iter().map(|(name, instance_config)| {
-        let filled_instance_config = instance_config.clone().make_filled(config.defaults.clone());
-        Server::new(name.clone(), filled_instance_config)
+fn get_server_list_from_config(config: &Config, config_dir: &Path) -> Vec<Server> {
+    config.servers.iter().map(|(id, instance_config)| {
+        let filled_instance_config = instance_config.clone().make_filled(id, config.defaults.clone(), config_dir);
+        Server::new(id.clone(), filled_instance_config)
     }).collect()
 }
