@@ -70,9 +70,6 @@ impl ArgBuilder {
             kv_args: LinkedHashMap::new(),
             playlist_vars: LinkedHashMap::new(),
         };
-
-        builder
-            .set_kv("+spewlog_enable", false)
     }
 
     fn set_flag(mut self, key: &str, is_enabled: bool) -> Self {
