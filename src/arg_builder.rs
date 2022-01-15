@@ -64,12 +64,12 @@ pub struct ArgBuilder {
 
 impl ArgBuilder {
     pub fn new() -> Self {
-        let builder = ArgBuilder {
+        ArgBuilder {
             kv_env_args: LinkedHashMap::new(),
             flag_args: HashSet::new(),
             kv_args: LinkedHashMap::new(),
             playlist_vars: LinkedHashMap::new(),
-        };
+        }
     }
 
     fn set_flag(mut self, key: &str, is_enabled: bool) -> Self {
