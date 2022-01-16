@@ -2,13 +2,19 @@ use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::net::{Ipv4Addr, SocketAddrV4};
+use std::path::Path;
 use std::time::{Duration, Instant};
-use bollard::container::{CreateContainerOptions};
+use bollard::container::{CreateContainerOptions, LogsOptions};
 use bollard::Docker;
-use bollard::models::{ContainerInspectResponse, ContainerState, HostConfig, PortBinding};
+use bollard::models::{ContainerInspectResponse, ContainerState, HostConfig, HostConfigLogConfig, PortBinding};
+use chrono::{Datelike, Timelike, Utc};
+use futures::StreamExt;
 use log::{debug, error, info, warn};
 use serde::{Serialize, Deserialize};
+use tokio::fs::OpenOptions;
+use tokio::io::AsyncWriteExt;
 use tokio::net::TcpStream;
+use tokio_stream::wrappers::ReadDirStream;
 use crate::Config;
 use crate::arg_builder::ArgBuilder;
 use crate::config::FilledInstanceConfig;
@@ -86,11 +92,6 @@ impl Server {
         config: &Config,
         docker: &Docker
     ) -> Result<(), Box<dyn Error>> {
-        // Ensure the log directory exists
-        if let Err(why) = tokio::fs::create_dir_all(&self.config.game_config.logs_dir).await {
-            warn!("Failed to create log directory {}: {}", self.config.game_config.logs_dir, why);
-        }
-
         let mut env_vars = Vec::new();
         ArgBuilder::new()
             .set_name(self.config.name.clone())
@@ -105,10 +106,43 @@ impl Server {
             debug!("  {}", env_var);
         }
 
-        let mut binds = vec![
-            format!("{}:/mnt/titanfall", config.game_dir),
-            format!("{}:/mnt/titanfall/R2Northstar/logs", self.config.game_config.logs_dir),
-        ];
+        // Ensure the log directory exists
+        if let Err(why) = tokio::fs::create_dir_all(&self.config.game_config.logs_dir).await {
+            warn!("Failed to create log directory {}: {}", self.config.game_config.logs_dir, why);
+        }
+
+        if let Err(why) = retain_recent_logfiles(Path::new(&self.config.game_config.logs_dir)).await {
+            log::warn!("Failed to rotate logs: {}", why);
+        }
+        let start_time = Utc::now();
+        let log_file_path = Path::new(&self.config.game_config.logs_dir)
+            .join(format!(
+                "{} {}-{}-{} {}-{}-{}.txt",
+                self.id,
+                start_time.year(),
+                start_time.month(),
+                start_time.day(),
+                start_time.hour(),
+                start_time.minute(),
+                start_time.second()
+            ));
+
+        let maybe_log_file = match OpenOptions::new()
+            .write(true)
+            .create(true)
+            .open(&log_file_path)
+            .await {
+            Ok(file) => {
+                info!("Writing logs to {}", log_file_path.display());
+                Some(file)
+            },
+            Err(why) => {
+                warn!("Failed to open log file {}: {}", log_file_path.display(), why);
+                None
+            }
+        };
+
+        let mut binds = vec![format!("{}:/mnt/titanfall", config.game_dir)];
         if let Some(mods_dir) = &self.config.game_config.mods_dir {
             binds.push(format!("{}:/mnt/mods:ro", mods_dir));
         }
@@ -117,6 +151,7 @@ impl Server {
             image: Some(config.docker_image.clone()),
             attach_stdout: Some(true),
             attach_stderr: Some(true),
+            attach_stdin: Some(true),
             env: Some(env_vars),
             exposed_ports: Some([
                 (format!("{}/tcp", auth_port), HashMap::new()),
@@ -142,6 +177,11 @@ impl Server {
                 cpu_quota: self.config.game_config.perf_cpus.map(|cpus| (cpus * 100000.) as i64),
                 cpuset_cpus: self.config.game_config.perf_cpu_set.clone(),
 
+                log_config: Some(HostConfigLogConfig {
+                    typ: Some("local".to_string()),
+                    ..Default::default()
+                }),
+
                 ..Default::default()
             }),
             ..Default::default()
@@ -159,6 +199,29 @@ impl Server {
 
         let container_id = create_response.id;
         docker.start_container::<String>(&container_id, None).await?;
+
+        if let Some(mut log_file) = maybe_log_file {
+            let mut log_stream = docker.logs::<String>(&container_id, Some(LogsOptions {
+                follow: true,
+                stdout: true,
+                stderr: true,
+                ..Default::default()
+            }));
+            tokio::spawn(async move {
+                let maybe_res: Result<(), Box<dyn Error>> = async {
+                    while let Some(v) = log_stream.next().await {
+                        let stripped_v = strip_ansi_escapes::strip(v?.into_bytes())?;
+                        log_file.write_all(&stripped_v).await?;
+                    }
+                    Ok(())
+                }.await;
+
+                if let Err(why) = maybe_res {
+                    warn!("Failed to pipe logs: {}", why);
+                }
+                info!("Finished piping logs!");
+            });
+        }
 
         let inspect_response = docker.inspect_container(&container_id, None)
             .await
@@ -445,4 +508,18 @@ fn get_container_ip_address(details: &ContainerInspectResponse) -> Option<&str> 
     let networks = network_settings.networks.as_ref()?;
     let first_network = networks.iter().next()?.1;
     Some(first_network.ip_address.as_ref()?)
+}
+
+async fn retain_recent_logfiles(logs_path: &Path) -> tokio::io::Result<()> {
+    let all_entries: Vec<_> = ReadDirStream::new(tokio::fs::read_dir(logs_path).await?).collect().await;
+    let mut all_entries = all_entries.into_iter().collect::<Result<Vec<_>, _>>()?;
+    if all_entries.len() > 5 {
+        // Sort the entries by name, so the first one is the oldest
+        all_entries.sort_unstable_by(|a, b| a.file_name().cmp(&b.file_name()));
+
+        let first_file_name = all_entries.first().unwrap().path();
+        tokio::fs::remove_file(&first_file_name).await?;
+        debug!("Deleted old log file {}", first_file_name.display());
+    }
+    Ok(())
 }

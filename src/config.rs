@@ -274,7 +274,7 @@ impl GameConfig {
         }
     }
 
-    pub fn fill(self, server_name: &str, config_dir: &Path) -> FilledGameConfig {
+    pub fn fill(self, id: &str, config_dir: &Path) -> FilledGameConfig {
         FilledGameConfig {
             description: self.description.unwrap_or("Your favourite R2Wraith server".to_string()),
             password: self.password.unwrap_or("".to_string()),
@@ -293,7 +293,7 @@ impl GameConfig {
 
             mods_dir: self.mods_dir.map(|mods_dir| config_dir.join(mods_dir).to_string_lossy().to_string()),
             logs_dir: config_dir
-                .join(self.logs_dir.unwrap_or_else(|| format!("r2wraith-logs/{}", server_name)))
+                .join(self.logs_dir.unwrap_or_else(|| format!("r2wraith-logs/{}", id)))
                 .to_string_lossy()
                 .to_string(),
             graphics_mode: self.graphics_mode.unwrap_or(GraphicsMode::Default),
@@ -338,7 +338,7 @@ pub struct InstanceConfig {
 
 impl InstanceConfig {
     pub fn make_filled(self, id: &str, default_game_config: GameConfig, config_dir: &Path) -> FilledInstanceConfig {
-        let game_config = self.game_config.or(default_game_config).fill(&id, config_dir);
+        let game_config = self.game_config.or(default_game_config).fill(id, config_dir);
         FilledInstanceConfig {
             name: self.name,
             auth_port: self.auth_port,

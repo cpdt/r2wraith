@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 bollard = "0.11"
+chrono = "0.4"
 futures = "0.3"
 linked-hash-map = { version = "0.5", features = [ "serde_impl" ] }
 log = "0.4"
@@ -14,5 +15,7 @@ rand = "0.8"
 serde = { version = "1.0", features = [ "derive" ] }
 serde_json = "1.0"
 simple_logger = "1.16"
+strip-ansi-escapes = "0.1"
 toml = "0.5"
 tokio = { version = "1.15", features = [ "full" ] }
+tokio-stream = { version = "0.1", features = [ "fs" ] }
