@@ -180,12 +180,19 @@ all servers.
  - Default: `15`
  - Example: `countdown-length-seconds = 30`
 
-#### `mods-dir`
+#### `mods`
 
- - Path to a directory of mods to install on the server, relative to the config file.
- - Default: not set
- - Example: `mods-dir = "/mods"`
- 
+ - A list of paths to directories of mods to install on the server, relative to the config file.
+ - Default: `[]`
+ - Example: `mods-dir = [ "mods/TeamShuffle", "mods/AutoBalance" ]`
+
+#### `logs-dir`
+
+ - A directory where game log files will be saved, relative to the config file. Each file will be named in the format
+   `servername YYYY-MM-DD hh-mm-ss.txt`, and only the newest 5 log files will be kept around.
+ - Default: `"r2wraith-logs/servername"`
+ - Example: `logs-dir = "/server/logs/my-server"`
+
 #### `graphics-mode`
 
  - Allows enabling software rendering for true-headless dedicated servers.
