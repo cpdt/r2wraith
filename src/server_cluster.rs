@@ -143,9 +143,12 @@ impl Server {
         };
 
         let mut binds = vec![format!("{}:/mnt/titanfall", config.game_dir)];
-        if let Some(mods_dir) = &self.config.game_config.mods_dir {
-            binds.push(format!("{}:/mnt/mods:ro", mods_dir));
-        }
+        binds.extend(self.config.game_config.mods.iter().filter_map(|mod_dir| {
+            Path::new(mod_dir)
+                .file_name()
+                .and_then(|mod_name| mod_name.to_str())
+                .map(|mod_name| format!("{}:/mnt/mods/{}:ro", mod_dir, mod_name))
+        }));
 
         let container_config = bollard::container::Config {
             image: Some(config.docker_image.clone()),

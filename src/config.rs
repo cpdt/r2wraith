@@ -160,7 +160,8 @@ pub struct FilledGameConfig {
     pub only_host_can_start: bool,
     pub countdown_length_seconds: u32,
 
-    pub mods_dir: Option<String>,
+    pub mods: HashSet<String>,
+
     pub logs_dir: String,
     pub graphics_mode: GraphicsMode,
     pub perf_memory_limit_bytes: Option<i64>,
@@ -198,7 +199,9 @@ pub struct GameConfig {
     pub only_host_can_start: Option<bool>,
     pub countdown_length_seconds: Option<u32>,
 
-    pub mods_dir: Option<String>,
+    #[serde(default)]
+    pub mods: HashSet<String>,
+
     pub logs_dir: Option<String>,
     pub graphics_mode: Option<GraphicsMode>,
     pub perf_memory_limit_bytes: Option<i64>,
@@ -227,6 +230,9 @@ pub struct GameConfig {
 
 impl GameConfig {
     pub fn or(self, other: GameConfig) -> GameConfig {
+        let mut mods = other.mods;
+        mods.extend(self.mods);
+
         let mut extra_playlist_vars = other.extra_playlist_vars;
         extra_playlist_vars.extend(self.extra_playlist_vars);
 
@@ -252,7 +258,8 @@ impl GameConfig {
             only_host_can_start: self.only_host_can_start.or(other.only_host_can_start),
             countdown_length_seconds: self.countdown_length_seconds.or(other.countdown_length_seconds),
 
-            mods_dir: self.mods_dir.or(other.mods_dir),
+            mods,
+
             logs_dir: self.logs_dir.or(other.logs_dir),
             graphics_mode: self.graphics_mode.or(other.graphics_mode),
             perf_memory_limit_bytes: self.perf_memory_limit_bytes.or(other.perf_memory_limit_bytes),
@@ -291,7 +298,14 @@ impl GameConfig {
             only_host_can_start: self.only_host_can_start.unwrap_or(false),
             countdown_length_seconds: self.countdown_length_seconds.unwrap_or(15),
 
-            mods_dir: self.mods_dir.map(|mods_dir| config_dir.join(mods_dir).to_string_lossy().to_string()),
+            mods: self.mods
+                .into_iter()
+                .map(|mods_dir| config_dir
+                    .join(mods_dir)
+                    .to_string_lossy()
+                    .to_string())
+                .collect(),
+
             logs_dir: config_dir
                 .join(self.logs_dir.unwrap_or_else(|| format!("r2wraith-logs/{}", id)))
                 .to_string_lossy()
