@@ -284,10 +284,15 @@ The following playlist overrides can be set. Use `extra-playlist-vars` to set an
  - A map of any extra convars to set. These will override convars set via other methods.
  - Example: `extra-vars = { ns_will_beep = "1" }`
 
-#### `extra_args`
+#### `extra-args`
 
  - A list of any extra command-line arguments to pass.
  - Example: `extra-args = [ "-coolmode", "-Pong", "20" ]`
+
+#### `extra-binds`
+
+ - A list of [Docker bind mounts](https://docs.docker.com/storage/bind-mounts/) in shortform `-v` syntax.
+ - Example: `extra-binds = [ "/mods/NoSP/burnmeter.gnut:/usr/lib/northstar/R2Northstar/mods/Northstar.CustomServers/mod/scripts/vscripts/burnmeter/_burnmeter.gnut:ro" ]`
 
 ## Building
 

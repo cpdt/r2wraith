@@ -179,6 +179,7 @@ pub struct FilledGameConfig {
     pub extra_playlist_vars: LinkedHashMap<String, String>,
     pub extra_vars: LinkedHashMap<String, String>,
     pub extra_args: Vec<String>,
+    pub extra_binds: Vec<String>,
 }
 
 #[derive(Default, Debug, Clone, Deserialize)]
@@ -226,6 +227,9 @@ pub struct GameConfig {
 
     #[serde(default)]
     pub extra_args: Vec<String>,
+
+    #[serde(default)]
+    pub extra_binds: Vec<String>,
 }
 
 impl GameConfig {
@@ -241,6 +245,9 @@ impl GameConfig {
 
         let mut extra_args = other.extra_args;
         extra_args.extend(self.extra_args);
+
+        let mut extra_binds = other.extra_binds;
+        extra_binds.extend(self.extra_binds);
 
         GameConfig {
             description: self.description.or(other.description),
@@ -278,6 +285,7 @@ impl GameConfig {
             extra_playlist_vars,
             extra_vars,
             extra_args,
+            extra_binds,
         }
     }
 
@@ -327,6 +335,7 @@ impl GameConfig {
             extra_playlist_vars: self.extra_playlist_vars,
             extra_vars: self.extra_vars,
             extra_args: self.extra_args,
+            extra_binds: self.extra_binds,
         }
     }
 }

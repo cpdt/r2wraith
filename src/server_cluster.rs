@@ -149,6 +149,7 @@ impl Server {
                 .and_then(|mod_name| mod_name.to_str())
                 .map(|mod_name| format!("{}:/mnt/mods/{}:ro", mod_dir, mod_name))
         }));
+        binds.extend(self.config.game_config.extra_binds.iter().cloned());
 
         let container_config = bollard::container::Config {
             image: Some(config.docker_image.clone()),
