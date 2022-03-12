@@ -14,6 +14,7 @@ use serde::{Serialize, Deserialize};
 use tokio::fs::OpenOptions;
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpStream;
+use tokio::time::sleep;
 use tokio_stream::wrappers::ReadDirStream;
 use crate::Config;
 use crate::arg_builder::ArgBuilder;
@@ -273,12 +274,20 @@ impl Server {
 
     pub async fn stop(&mut self, docker: &Docker) {
         if let ServerState::Running(running_server) = &self.state {
-            match docker.stop_container(&running_server.container_id, None).await {
-                Ok(()) => info!("Stopped {}", self.id),
-                Err(why) => {
-                    error!("Failed to stop {}: {}", self.id, why);
-                    return;
+            if let Err(why) = docker.stop_container(&running_server.container_id, None).await {
+                error!("Failed to stop {}: {}", self.id, why);
+                return;
+            }
+
+            // Wait for the container to actually stop
+            loop {
+                if !is_container_running(&running_server.container_id, docker).await {
+                    info!("Stopped {}", self.id);
+                    break;
                 }
+
+                debug!("Waiting for {} to stop", self.id);
+                sleep(Duration::from_millis(100)).await;
             }
         }
         self.state = ServerState::NotRunning;
@@ -395,7 +404,7 @@ impl ServerCluster {
     pub async fn poll(&mut self, config: &Config, docker: &Docker) -> PollStatus {
         let poll_time = Utc::now();
         let restart_servers_futures = self.servers.iter_mut().enumerate().map(|(server_index, server)| async move {
-            let running_server = match &server.state {
+            let mut running_server = match &server.state {
                 ServerState::Running(running_server) => running_server,
                 ServerState::NotRunning => return Some(server_index),
             };
@@ -413,7 +422,12 @@ impl ServerCluster {
                 if let Some(next_restart_time) = schedule.after(&running_server.start_time).next() {
                     if next_restart_time < poll_time {
                         warn!("Server {} has passed a scheduled restart", server.id);
-                        return Some(server_index);
+                        server.stop(docker).await;
+
+                        running_server = match &server.state {
+                            ServerState::Running(running_server) => running_server,
+                            ServerState::NotRunning => return Some(server_index),
+                        };
                     }
                 }
             }
