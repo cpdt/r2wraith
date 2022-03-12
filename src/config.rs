@@ -1,8 +1,11 @@
 use std::collections::{HashSet};
+use std::fmt::Formatter;
 use std::ops::RangeInclusive;
 use std::path::Path;
+use std::str::FromStr;
 use linked_hash_map::LinkedHashMap;
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
+use serde::de::Visitor;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -145,6 +148,9 @@ impl PlaylistOverrides {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct FilledGameConfig {
+    pub docker_image: String,
+    pub game_dir: String,
+
     pub description: String,
     pub password: String,
     pub tick_rate: u32,
@@ -164,6 +170,7 @@ pub struct FilledGameConfig {
 
     pub logs_dir: String,
     pub graphics_mode: GraphicsMode,
+    pub restart_schedule: Option<cron_clock::Schedule>,
     pub perf_memory_limit_bytes: Option<i64>,
     pub perf_virtual_memory_limit_bytes: Option<i64>,
     pub perf_cpus: Option<f64>,
@@ -185,6 +192,9 @@ pub struct FilledGameConfig {
 #[derive(Default, Debug, Clone, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct GameConfig {
+    pub docker_image: Option<String>,
+    pub game_dir: Option<String>,
+
     pub description: Option<String>,
     pub password: Option<String>,
     pub tick_rate: Option<u32>,
@@ -205,6 +215,7 @@ pub struct GameConfig {
 
     pub logs_dir: Option<String>,
     pub graphics_mode: Option<GraphicsMode>,
+    pub restart_schedule: Option<CronSchedule>,
     pub perf_memory_limit_bytes: Option<i64>,
     pub perf_virtual_memory_limit_bytes: Option<i64>,
     pub perf_cpus: Option<f64>,
@@ -250,6 +261,9 @@ impl GameConfig {
         extra_binds.extend(self.extra_binds);
 
         GameConfig {
+            docker_image: self.docker_image.or(other.docker_image),
+            game_dir: self.game_dir.or(other.game_dir),
+
             description: self.description.or(other.description),
             password: self.password.or(other.password),
             tick_rate: self.tick_rate.or(other.tick_rate),
@@ -269,6 +283,7 @@ impl GameConfig {
 
             logs_dir: self.logs_dir.or(other.logs_dir),
             graphics_mode: self.graphics_mode.or(other.graphics_mode),
+            restart_schedule: self.restart_schedule.or(other.restart_schedule),
             perf_memory_limit_bytes: self.perf_memory_limit_bytes.or(other.perf_memory_limit_bytes),
             perf_virtual_memory_limit_bytes: self.perf_virtual_memory_limit_bytes.or(other.perf_virtual_memory_limit_bytes),
             perf_cpus: self.perf_cpus.or(other.perf_cpus),
@@ -291,6 +306,12 @@ impl GameConfig {
 
     pub fn fill(self, id: &str, config_dir: &Path) -> FilledGameConfig {
         FilledGameConfig {
+            docker_image: self.docker_image.unwrap_or("".to_string()),
+            game_dir: config_dir
+                .join(self.game_dir.as_ref().map(|s| s as &str).unwrap_or(""))
+                .to_string_lossy()
+                .to_string(),
+
             description: self.description.unwrap_or("Your favourite R2Wraith server".to_string()),
             password: self.password.unwrap_or("".to_string()),
             tick_rate: self.tick_rate.unwrap_or(60),
@@ -319,6 +340,7 @@ impl GameConfig {
                 .to_string_lossy()
                 .to_string(),
             graphics_mode: self.graphics_mode.unwrap_or(GraphicsMode::Default),
+            restart_schedule: self.restart_schedule.map(|schedule| schedule.0),
             perf_memory_limit_bytes: self.perf_memory_limit_bytes,
             perf_virtual_memory_limit_bytes: self.perf_virtual_memory_limit_bytes,
             perf_cpus: self.perf_cpus,
@@ -374,9 +396,6 @@ impl InstanceConfig {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct Config {
-    pub docker_image: String,
-    pub game_dir: String,
-
     #[serde(default = "default_poll_seconds")]
     pub poll_seconds: f64,
 
@@ -402,4 +421,29 @@ fn default_auth_ports() -> RangeInclusive<u16> {
 
 fn default_game_ports() -> RangeInclusive<u16> {
     37015..=37020
+}
+
+#[derive(Debug, Clone)]
+pub struct CronSchedule(pub cron_clock::Schedule);
+
+impl<'de> Deserialize<'de> for CronSchedule {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de> {
+        deserializer.deserialize_str(CronScheduleVisitor)
+    }
+}
+
+struct CronScheduleVisitor;
+
+impl<'de> Visitor<'de> for CronScheduleVisitor {
+    type Value = CronSchedule;
+
+    fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
+        write!(formatter, "a cron schedule string")
+    }
+
+    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E> where E: serde::de::Error {
+        cron_clock::Schedule::from_str(v)
+            .map(CronSchedule)
+            .map_err(|e| serde::de::Error::custom(e))
+    }
 }

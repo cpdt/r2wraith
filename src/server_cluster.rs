@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 use bollard::container::{CreateContainerOptions, LogsOptions};
 use bollard::Docker;
 use bollard::models::{ContainerInspectResponse, ContainerState, HostConfig, HostConfigLogConfig, PortBinding};
-use chrono::{Datelike, Timelike, Utc};
+use chrono::{Datelike, DateTime, Timelike, Utc};
 use futures::StreamExt;
 use log::{debug, error, info, warn};
 use serde::{Serialize, Deserialize};
@@ -21,15 +21,19 @@ use crate::config::FilledInstanceConfig;
 
 #[derive(Debug)]
 enum StartServerError {
+    ContainerDidntStart(bollard::errors::Error),
     ContainerCrashedWhileStarting,
     ContainerHasNoIp,
+    ContainerHasNoCreated,
 }
 
 impl Display for StartServerError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
+            StartServerError::ContainerDidntStart(err) => write!(f, "The container did not start: {}", err),
             StartServerError::ContainerCrashedWhileStarting => write!(f, "The container crashed while initializing"),
             StartServerError::ContainerHasNoIp => write!(f, "The container was not assigned an IP address"),
+            StartServerError::ContainerHasNoCreated => write!(f, "The container was not assigned a created time"),
         }
     }
 }
@@ -46,6 +50,7 @@ pub struct RunningServer {
     container_id: String,
     auth_port: u16,
     game_port: u16,
+    start_time: DateTime<Utc>,
 }
 
 #[derive(Debug)]
@@ -68,6 +73,7 @@ pub struct SerializedServer {
     pub container_id: String,
     pub auth_port: u16,
     pub game_port: u16,
+
 }
 
 #[derive(Default)]
@@ -89,7 +95,6 @@ impl Server {
         &mut self,
         auth_port: u16,
         game_port: u16,
-        config: &Config,
         docker: &Docker
     ) -> Result<(), Box<dyn Error>> {
         let mut env_vars = Vec::new();
@@ -142,7 +147,7 @@ impl Server {
             }
         };
 
-        let mut binds = vec![format!("{}:/mnt/titanfall", config.game_dir)];
+        let mut binds = vec![format!("{}:/mnt/titanfall", self.config.game_config.game_dir)];
         binds.extend(self.config.game_config.mods.iter().filter_map(|mod_dir| {
             Path::new(mod_dir)
                 .file_name()
@@ -152,7 +157,7 @@ impl Server {
         binds.extend(self.config.game_config.extra_binds.iter().cloned());
 
         let container_config = bollard::container::Config {
-            image: Some(config.docker_image.clone()),
+            image: Some(self.config.game_config.docker_image.clone()),
             attach_stdout: Some(true),
             attach_stderr: Some(true),
             attach_stdin: Some(true),
@@ -229,10 +234,10 @@ impl Server {
 
         let inspect_response = docker.inspect_container(&container_id, None)
             .await
-            .ok();
-        let container_ip = inspect_response
-            .as_ref()
-            .and_then(get_container_ip_address)
+            .map_err(StartServerError::ContainerDidntStart)?;
+        let start_time = get_container_created(&inspect_response)
+            .ok_or(StartServerError::ContainerHasNoCreated)?;
+        let container_ip = get_container_ip_address(&inspect_response)
             .and_then(|ip| ip.parse::<Ipv4Addr>().ok())
             .ok_or(StartServerError::ContainerHasNoIp)?;
         let container_auth_address = SocketAddrV4::new(container_ip, auth_port);
@@ -261,6 +266,7 @@ impl Server {
             container_id,
             auth_port,
             game_port,
+            start_time,
         });
         Ok(())
     }
@@ -336,7 +342,7 @@ impl ServerCluster {
         self.servers
             .iter()
             .filter_map(|server| match &server.state {
-                ServerState::Running(RunningServer { container_id, auth_port, game_port }) => Some(SerializedServer {
+                ServerState::Running(RunningServer { container_id, auth_port, game_port, .. }) => Some(SerializedServer {
                     name: server.id.clone(),
                     container_id: container_id.to_string(),
                     auth_port: *auth_port,
@@ -357,21 +363,37 @@ impl ServerCluster {
                 }
             };
 
-            if !is_container_running(&serialized_server.container_id, docker).await {
-                warn!("Server {} doesn't appear to be running anymore", serialized_server.name);
-                continue;
-            }
+            let maybe_inspect = docker
+                .inspect_container(&serialized_server.container_id, None)
+                .await
+                .ok();
+            let inspect = match maybe_inspect {
+                Some(inspect) if get_container_is_running(&inspect) => inspect,
+                _ => {
+                    warn!("Server {} doesn't appear to be running anymore", serialized_server.name);
+                    continue;
+                }
+            };
+            let start_time = match get_container_created(&inspect) {
+                Some(start_time) => start_time,
+                None => {
+                    warn!("Server {} does not have a valid created time", serialized_server.name);
+                    continue;
+                }
+            };
 
             debug!("Restored {} with container {}", matching_server.id, serialized_server.container_id);
             matching_server.state = ServerState::Running(RunningServer {
                 container_id: serialized_server.container_id.clone(),
                 auth_port: serialized_server.auth_port,
                 game_port: serialized_server.game_port,
+                start_time,
             });
         }
     }
 
     pub async fn poll(&mut self, config: &Config, docker: &Docker) -> PollStatus {
+        let poll_time = Utc::now();
         let restart_servers_futures = self.servers.iter_mut().enumerate().map(|(server_index, server)| async move {
             let running_server = match &server.state {
                 ServerState::Running(running_server) => running_server,
@@ -386,6 +408,16 @@ impl ServerCluster {
                 }
                 Some(details) => details,
             };
+
+            if let Some(schedule) = &server.config.game_config.restart_schedule {
+                if let Some(next_restart_time) = schedule.after(&running_server.start_time).next() {
+                    if next_restart_time < poll_time {
+                        warn!("Server {} has passed a scheduled restart", server.id);
+                        return Some(server_index);
+                    }
+                }
+            }
+
             let container_ip = match get_container_ip_address(&details).and_then(|address| address.parse::<Ipv4Addr>().ok()) {
                 Some(ip) => ip,
                 None => {
@@ -489,7 +521,7 @@ impl ServerCluster {
                 None => return,
             };
 
-            if let Err(why) = server.start(details.auth_port, details.game_port, config, docker).await {
+            if let Err(why) = server.start(details.auth_port, details.game_port, docker).await {
                 error!("Could not start {}: {}", server.id, why);
             }
         });
@@ -502,9 +534,22 @@ async fn is_container_running(container_id: &str, docker: &Docker) -> bool {
     docker.inspect_container(container_id, None)
         .await
         .ok()
-        .and_then(|details| details.state)
+        .map(|i| get_container_is_running(&i))
+        .unwrap_or(false)
+}
+
+fn get_container_is_running(inspect: &ContainerInspectResponse) -> bool {
+    inspect.state
+        .as_ref()
         .and_then(|state| state.running)
         .unwrap_or(false)
+}
+
+fn get_container_created(details: &ContainerInspectResponse) -> Option<DateTime<Utc>> {
+    details.created
+        .as_ref()
+        .and_then(|time| DateTime::parse_from_rfc3339(time).ok())
+        .map(|time| time.with_timezone(&Utc))
 }
 
 fn get_container_ip_address(details: &ContainerInspectResponse) -> Option<&str> {

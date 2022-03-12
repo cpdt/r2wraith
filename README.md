@@ -47,13 +47,13 @@ Config file structure and defaults:
 
 ```toml
 poll-seconds = 5                            # how often to check each server's running state
-docker-image = "northstar-dedicated"        # name of docker image to run
-game-dir = "/titanfall"                     # location of the game directory
 auth-ports = { start = 8081, end = 8085 }   # range of ports available to use for the Northstar auth server
 game-ports = { start = 37015, end = 37020 } # range of ports available to use for the game server
 
 [defaults]
 # default settings for all servers, see Server properties below
+docker-image = "northstar-dedicated"    # name of docker image to run
+game-dir = "/titanfall"                 # location of the game directory
 
 [servers.my-first-server]
 name = "My first server"    # required -  name shown in the in-game server list
@@ -74,6 +74,16 @@ name = "My second server"
 R2Wraith provides many properties you can configure for each server. It provides sane defaults for all properties,
 you can override these by setting them under each server, or in the `[defaults]` section of the config file to apply to
 all servers.
+
+#### `docker-image`
+
+ - The name of a Docker image to start a container from each time the server is started.
+ - Example: `docker-image = "ghcr.io/pg9182/northstar-dedicated:1-tf2.0.11.0"`
+
+#### `game-dir`
+
+ - A path to the game directory, relative to the config file.
+ - Example: `game-dir = "/data/titanfall"`
 
 #### `description`
 
@@ -199,6 +209,12 @@ all servers.
  - Possible values: `"default"`, `"software"`
  - Default: `"default"`
  - Example: `graphics-mode = "software"`
+
+#### `restart-schedule`
+
+ - A cron schedule expression that indicates when the server should be automatically restarted. Times are in UTC.
+ - Default: not set
+ - Example: `restart-schedule = "0 2 * * *"`
 
 #### `playlist`
 
