@@ -1,8 +1,6 @@
+[defaults]
 docker-image = "northstar-dedicated"
 game-dir = "/titanfall"
-
-[defaults]
-graphics-mode = "software"
 should-return-to-lobby = false
 player-permissions = "none"
 match-epilogue-enabled = false
