@@ -214,7 +214,7 @@ all servers.
 
  - A cron schedule expression that indicates when the server should be automatically restarted. Times are in UTC.
  - Default: not set
- - Example: `restart-schedule = "0 2 * * *"`
+ - Example: `restart-schedule = "0 0 2 * * * *"`
 
 #### `playlist`
 

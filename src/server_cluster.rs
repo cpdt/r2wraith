@@ -281,7 +281,7 @@ impl Server {
 
             // Wait for the container to actually stop
             loop {
-                if !is_container_running(&running_server.container_id, docker).await {
+                if docker.inspect_container(&running_server.container_id, None).await.is_err() {
                     info!("Stopped {}", self.id);
                     break;
                 }
