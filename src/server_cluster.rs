@@ -117,9 +117,6 @@ impl Server {
             warn!("Failed to create log directory {}: {}", self.config.game_config.logs_dir, why);
         }
 
-        if let Err(why) = retain_recent_logfiles(Path::new(&self.config.game_config.logs_dir)).await {
-            log::warn!("Failed to rotate logs: {}", why);
-        }
         let start_time = Utc::now();
         let log_file_path = Path::new(&self.config.game_config.logs_dir)
             .join(format!(
@@ -571,18 +568,4 @@ fn get_container_ip_address(details: &ContainerInspectResponse) -> Option<&str> 
     let networks = network_settings.networks.as_ref()?;
     let first_network = networks.iter().next()?.1;
     Some(first_network.ip_address.as_ref()?)
-}
-
-async fn retain_recent_logfiles(logs_path: &Path) -> tokio::io::Result<()> {
-    let all_entries: Vec<_> = ReadDirStream::new(tokio::fs::read_dir(logs_path).await?).collect().await;
-    let mut all_entries = all_entries.into_iter().collect::<Result<Vec<_>, _>>()?;
-    if all_entries.len() > 5 {
-        // Sort the entries by name, so the first one is the oldest
-        all_entries.sort_unstable_by(|a, b| a.file_name().cmp(&b.file_name()));
-
-        let first_file_name = all_entries.first().unwrap().path();
-        tokio::fs::remove_file(&first_file_name).await?;
-        debug!("Deleted old log file {}", first_file_name.display());
-    }
-    Ok(())
 }
