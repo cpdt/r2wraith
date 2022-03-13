@@ -18,7 +18,7 @@ enum ReplCommand {
     SetServers(Vec<Server>),
     StopOld,
     RestartAll,
-    Restart(String),
+    Restart(Vec<String>),
 }
 
 #[tokio::main]
@@ -126,15 +126,13 @@ async fn main() {
                         Some(ReplCommand::RestartAll) => {
                             server_cluster.stop_all(&docker).await;
                         }
-                        Some(ReplCommand::Restart(server_name)) => {
-                            match server_cluster.get_mut(&server_name) {
-                                Some(server) => {
-                                    server.stop(&docker).await;
+                        Some(ReplCommand::Restart(servers)) => {
+                            for server_name in servers {
+                                match server_cluster.get_mut(&server_name) {
+                                    Some(server) => server.stop(&docker).await,
+                                    None => info!("Unknown server {}", server_name),
                                 }
-                                None => {
-                                    info!("Unknown server {}", server_name);
-                                }
-                            };
+                            }
                         }
                         None => break,
                     };
@@ -177,10 +175,7 @@ async fn main() {
                 break;
             } else if command == "restartall" {
                 repl_sender.send(ReplCommand::RestartAll).unwrap();
-            } else if command.starts_with("restart ") {
-                let server_name = command["restart ".len()..].trim();
-                repl_sender.send(ReplCommand::Restart(server_name.to_string())).unwrap();
-            } else if command.starts_with("reload") {
+            } else if command == "reload" {
                 let new_config = match load_config(&full_config_path) {
                     Ok(config) => config,
                     Err(why) => {
@@ -192,6 +187,15 @@ async fn main() {
                 repl_sender.send(ReplCommand::SetServers(new_servers)).unwrap();
             } else if command == "stopold" {
                 repl_sender.send(ReplCommand::StopOld).unwrap();
+            } else if command.starts_with("restart ") {
+                let server_names = command["restart ".len()..]
+                    .trim()
+                    .split_whitespace()
+                    .map(|server_name| server_name.to_string())
+                    .collect();
+                repl_sender.send(ReplCommand::Restart(server_names)).unwrap();
+            } else {
+                println!("< Unknown command: {}", command);
             }
          }
     });
