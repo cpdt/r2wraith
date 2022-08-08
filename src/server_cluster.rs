@@ -162,6 +162,7 @@ impl Server {
             exposed_ports: Some([
                 (format!("{}/tcp", auth_port), HashMap::new()),
                 (format!("{}/udp", game_port), HashMap::new()),
+                (format!("{}/tcp", game_port), HashMap::new()),
             ].into_iter().collect()),
             host_config: Some(HostConfig {
                 binds: Some(binds),
