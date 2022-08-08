@@ -175,6 +175,10 @@ impl Server {
                         host_ip: None,
                         host_port: Some(game_port.to_string()),
                     }])),
+                    (format!("{}/tcp", game_port), Some(vec![PortBinding {
+                        host_ip: None,
+                        host_port: Some(game_port.to_string()),
+                    }])),
                 ].into_iter().collect()),
                 auto_remove: Some(true),
 
