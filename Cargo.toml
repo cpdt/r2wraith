@@ -6,6 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+aes-gcm = "0.10"
 bollard = "0.11"
 chrono = { version = "0.4", features = [ "serde" ] }
 cron_clock = "0.8"
