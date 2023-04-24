@@ -20,7 +20,7 @@ use std::time::{Duration, Instant};
 use tokio::fs::OpenOptions;
 use tokio::io::AsyncWriteExt;
 use tokio::net::UdpSocket;
-use tokio::time::{sleep, timeout};
+use tokio::time::sleep;
 
 #[derive(Debug)]
 enum StartServerError {
@@ -270,34 +270,35 @@ impl Server {
         info!("Server {} is starting...", self.id);
         let now = Instant::now();
 
-        // Wait for the auth server to start on the required port
-        loop {
-            debug!("Waiting for {} to be ready...", self.id);
-            tokio::time::sleep(Duration::from_secs(5)).await;
+        let user_id = rand::random();
+        let socket = UdpSocket::bind("0.0.0.0:0").await?;
+        socket.connect(container_game_address).await?;
 
-            // Ensure the container is still running so we don't get stuck in an infinite loop
-            if !is_container_running(&container_id, docker).await {
-                return Err(Box::new(StartServerError::ContainerCrashedWhileStarting));
+        // This task repeatedly checks if the container is running and sends connect attempts.
+        let send_task = async {
+            loop {
+                info!("Trying to connect to server...");
+
+                // Ensure the container is still running so we don't get stuck in an infinite loop
+                if !is_container_running(&container_id, docker).await {
+                    return Err(Box::new(StartServerError::ContainerCrashedWhileStarting) as Box<dyn Error>);
+                }
+
+                // Send a connect packet and see if we get a reply.
+                send_connect(&socket, user_id).await
+                    .map_err(|err| Box::new(err) as Box<dyn Error>)?;
             }
+        };
+        let receive_task = receive_connect_reply(&socket, user_id);
 
-            // Based on https://github.com/R2Northstar/Atlas/blob/main/pkg/api/api0/server.go#L428-L463
-            // Send a connect packet and see if we get a reply, to see if the server has started.
-            let socket = UdpSocket::bind("0.0.0.0:0").await?;
-            socket.connect(container_game_address).await?;
-
-            let user_id = rand::random();
-            send_connect(&socket, user_id).await?;
-            match timeout(
-                Duration::from_secs(1),
-                receive_connect_reply(&socket, user_id),
-            )
-            .await
-            {
-                Ok(Ok(())) => break,
-                Ok(Err(err)) => warn!("Connect attempt failed: {}", err),
-                Err(err) => warn!("Connect timed out: {}", err),
+        tokio::select! {
+            send_result = send_task => {
+                send_result?;
             }
-        }
+            receive_result = receive_task => {
+                receive_result?;
+            }
+        };
 
         info!(
             "Server {} has started in {}s",
