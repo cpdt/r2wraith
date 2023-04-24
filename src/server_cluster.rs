@@ -277,6 +277,7 @@ impl Server {
         // This task repeatedly checks if the container is running and sends connect attempts.
         let send_task = async {
             loop {
+                sleep(Duration::from_secs(5)).await;
                 info!("Trying to connect to server...");
 
                 // Ensure the container is still running so we don't get stuck in an infinite loop
