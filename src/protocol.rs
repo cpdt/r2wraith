@@ -1,4 +1,4 @@
-use aes_gcm::{AeadInPlace, Aes256Gcm, KeyInit, Nonce, Tag};
+use aes_gcm::{AeadInPlace, Aes128Gcm, KeyInit, Nonce, Tag};
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
 use tokio::net::UdpSocket;
@@ -41,7 +41,7 @@ impl From<std::io::Error> for ProtocolError {
 }
 
 fn encrypt_packet(mut data: Vec<u8>) -> Result<Box<[u8]>, aes_gcm::Error> {
-    let cipher = Aes256Gcm::new_from_slice(KEY).unwrap();
+    let cipher = Aes128Gcm::new_from_slice(KEY).unwrap();
 
     let nonce_bytes: [u8; NONCE_BYTES] = rand::random();
     let nonce = Nonce::from_slice(&nonce_bytes);
@@ -59,7 +59,7 @@ fn decrypt_packet(packet: &mut [u8]) -> Result<&mut [u8], aes_gcm::Error> {
     let (nonce_bytes, after_nonce) = packet.split_at_mut(NONCE_BYTES);
     let (tag_bytes, data) = after_nonce.split_at_mut(TAG_BYTES);
 
-    let cipher = Aes256Gcm::new_from_slice(KEY).unwrap();
+    let cipher = Aes128Gcm::new_from_slice(KEY).unwrap();
 
     let nonce = Nonce::from_slice(&nonce_bytes);
     let tag = Tag::from_slice(&tag_bytes);
