@@ -1,11 +1,11 @@
+use crate::config::Config;
+use crate::server_cluster::{PollStatus, SerializedServer, Server, ServerCluster};
+use bollard::Docker;
+use log::{debug, error, info, warn, LevelFilter};
 use std::error::Error;
 use std::path::Path;
 use std::time::Duration;
-use bollard::Docker;
-use log::{debug, error, info, LevelFilter, warn};
 use tokio::sync::mpsc::unbounded_channel;
-use crate::config::Config;
-use crate::server_cluster::{PollStatus, SerializedServer, Server, ServerCluster};
 
 mod arg_builder;
 mod config;
@@ -61,7 +61,9 @@ async fn main() {
     info!("Docker {}", docker_version);
 
     let full_config_path = std::env::current_dir().unwrap().join(&config_file_path);
-    let restore_file_path = std::env::current_dir().unwrap().join(&format!("{}.restore.json", config_file_path));
+    let restore_file_path = std::env::current_dir()
+        .unwrap()
+        .join(&format!("{}.restore.json", config_file_path));
 
     let config = match load_config(&full_config_path) {
         Ok(config) => config,
@@ -76,11 +78,15 @@ async fn main() {
         Ok(servers) => {
             match std::fs::remove_file(&restore_file_path) {
                 Ok(()) => debug!("Removed restore file at {}", restore_file_path.display()),
-                Err(why) => warn!("Failed to remove restore file at {}: {}", restore_file_path.display(), why),
+                Err(why) => warn!(
+                    "Failed to remove restore file at {}: {}",
+                    restore_file_path.display(),
+                    why
+                ),
             };
 
             servers
-        },
+        }
         Err(why) => {
             warn!("Failed to load server restore data: {}", why);
             vec![]
@@ -89,7 +95,9 @@ async fn main() {
 
     let mut server_cluster = ServerCluster::new();
     server_cluster.load_servers(get_server_list_from_config(&config, &config_dir));
-    server_cluster.deserialize(restore_serialized_servers, &docker).await;
+    server_cluster
+        .deserialize(restore_serialized_servers, &docker)
+        .await;
 
     server_cluster.poll(&config, &docker).await;
     info!("Ready!");
@@ -147,57 +155,59 @@ async fn main() {
     });
 
     // Start REPL
-    let repl_join_handle = tokio::task::spawn_blocking(move || {
-        loop {
-            let mut buffer = String::new();
-            if let Err(_) = std::io::stdin().read_line(&mut buffer) {
-                continue;
-            }
+    let repl_join_handle = tokio::task::spawn_blocking(move || loop {
+        let mut buffer = String::new();
+        if let Err(_) = std::io::stdin().read_line(&mut buffer) {
+            continue;
+        }
 
-            let command = buffer.trim();
+        let command = buffer.trim();
 
-            if command == "help" || command == "?" {
-                println!("< Available commands:");
-                println!("<   version - Display the version of R2Wraith");
-                println!("<   stopwraith - Stop R2Wraith, keeping servers running and writing a restore file");
-                println!("<   stopall - Shutdown all servers and stop R2Wraith");
-                println!("<   restartall - Restart all servers");
-                println!("<   restart [name] - Restart a server by name");
-                println!("<   reload - Reload the configuration file, starting any added servers");
-                println!("<   stopold - Stop any servers that have been removed from configuration");
-            } else if command == "version" {
-                println!("< R2Wraith {}", env!("CARGO_PKG_VERSION"));
-            } else if command == "stopwraith" {
-                repl_sender.send(ReplCommand::StopWraith).unwrap();
-                break;
-            } else if command == "stopall" {
-                repl_sender.send(ReplCommand::StopAll).unwrap();
-                break;
-            } else if command == "restartall" {
-                repl_sender.send(ReplCommand::RestartAll).unwrap();
-            } else if command == "reload" {
-                let new_config = match load_config(&full_config_path) {
-                    Ok(config) => config,
-                    Err(why) => {
-                        println!("< Failed to read config file: {}", why);
-                        continue;
-                    }
-                };
-                let new_servers = get_server_list_from_config(&new_config, &config_dir);
-                repl_sender.send(ReplCommand::SetServers(new_servers)).unwrap();
-            } else if command == "stopold" {
-                repl_sender.send(ReplCommand::StopOld).unwrap();
-            } else if command.starts_with("restart ") {
-                let server_names = command["restart ".len()..]
-                    .trim()
-                    .split_whitespace()
-                    .map(|server_name| server_name.to_string())
-                    .collect();
-                repl_sender.send(ReplCommand::Restart(server_names)).unwrap();
-            } else {
-                println!("< Unknown command: {}", command);
-            }
-         }
+        if command == "help" || command == "?" {
+            println!("< Available commands:");
+            println!("<   version - Display the version of R2Wraith");
+            println!("<   stopwraith - Stop R2Wraith, keeping servers running and writing a restore file");
+            println!("<   stopall - Shutdown all servers and stop R2Wraith");
+            println!("<   restartall - Restart all servers");
+            println!("<   restart [name] - Restart a server by name");
+            println!("<   reload - Reload the configuration file, starting any added servers");
+            println!("<   stopold - Stop any servers that have been removed from configuration");
+        } else if command == "version" {
+            println!("< R2Wraith {}", env!("CARGO_PKG_VERSION"));
+        } else if command == "stopwraith" {
+            repl_sender.send(ReplCommand::StopWraith).unwrap();
+            break;
+        } else if command == "stopall" {
+            repl_sender.send(ReplCommand::StopAll).unwrap();
+            break;
+        } else if command == "restartall" {
+            repl_sender.send(ReplCommand::RestartAll).unwrap();
+        } else if command == "reload" {
+            let new_config = match load_config(&full_config_path) {
+                Ok(config) => config,
+                Err(why) => {
+                    println!("< Failed to read config file: {}", why);
+                    continue;
+                }
+            };
+            let new_servers = get_server_list_from_config(&new_config, &config_dir);
+            repl_sender
+                .send(ReplCommand::SetServers(new_servers))
+                .unwrap();
+        } else if command == "stopold" {
+            repl_sender.send(ReplCommand::StopOld).unwrap();
+        } else if command.starts_with("restart ") {
+            let server_names = command["restart ".len()..]
+                .trim()
+                .split_whitespace()
+                .map(|server_name| server_name.to_string())
+                .collect();
+            repl_sender
+                .send(ReplCommand::Restart(server_names))
+                .unwrap();
+        } else {
+            println!("< Unknown command: {}", command);
+        }
     });
 
     server_join_handle.await.unwrap();
@@ -209,18 +219,30 @@ fn load_config(config_path: &Path) -> Result<Config, Box<dyn Error>> {
 }
 
 fn load_serialized_servers(restore_path: &Path) -> Result<Vec<SerializedServer>, Box<dyn Error>> {
-    Ok(serde_json::from_str(&std::fs::read_to_string(restore_path)?)?)
+    Ok(serde_json::from_str(&std::fs::read_to_string(
+        restore_path,
+    )?)?)
 }
 
-fn store_serialized_servers(restore_path: &Path, server_cluster: &ServerCluster) -> Result<(), Box<dyn Error>> {
+fn store_serialized_servers(
+    restore_path: &Path,
+    server_cluster: &ServerCluster,
+) -> Result<(), Box<dyn Error>> {
     let serialized_servers = serde_json::to_string(&server_cluster.serialize())?;
     std::fs::write(&restore_path, serialized_servers)?;
     Ok(())
 }
 
 fn get_server_list_from_config(config: &Config, config_dir: &Path) -> Vec<Server> {
-    config.servers.iter().map(|(id, instance_config)| {
-        let filled_instance_config = instance_config.clone().make_filled(id, config.defaults.clone(), config_dir);
-        Server::new(id.clone(), filled_instance_config)
-    }).collect()
+    config
+        .servers
+        .iter()
+        .map(|(id, instance_config)| {
+            let filled_instance_config =
+                instance_config
+                    .clone()
+                    .make_filled(id, config.defaults.clone(), config_dir);
+            Server::new(id.clone(), filled_instance_config)
+        })
+        .collect()
 }

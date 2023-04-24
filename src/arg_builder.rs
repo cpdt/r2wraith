@@ -1,12 +1,18 @@
-use std::collections::HashSet;
+use crate::config::{
+    BoostMeterOverdrive, FilledGameConfig, GraphicsMode, PilotBleedout, PlaylistOverrides,
+    PrivateLobbyPlayerPermissions, Riff,
+};
 use linked_hash_map::LinkedHashMap;
-use crate::config::{BoostMeterOverdrive, FilledGameConfig, GraphicsMode, PilotBleedout, PlaylistOverrides, PrivateLobbyPlayerPermissions, Riff};
+use std::collections::HashSet;
 
 trait IntoVarValue {
     fn into_var_value(self) -> Option<String>;
 }
 
-impl<T> IntoVarValue for Option<T> where T: IntoVarValue {
+impl<T> IntoVarValue for Option<T>
+where
+    T: IntoVarValue,
+{
     fn into_var_value(self) -> Option<String> {
         self.and_then(|val| val.into_var_value())
     }
@@ -109,10 +115,6 @@ impl ArgBuilder {
         self.set_kv_env("NS_SERVER_NAME", name)
     }
 
-    pub fn set_auth_port(self, auth_port: u16) -> Self {
-        self.set_kv_env("NS_PORT_AUTH", auth_port)
-    }
-
     pub fn set_game_port(self, game_port: u16) -> Self {
         self.set_kv_env("NS_PORT", game_port)
     }
@@ -163,11 +165,14 @@ impl ArgBuilder {
     }
 
     pub fn set_player_permissions(self, player_permissions: PrivateLobbyPlayerPermissions) -> Self {
-        self.set_kv("+ns_private_match_only_host_can_change_settings", match player_permissions {
-            PrivateLobbyPlayerPermissions::All => 0,
-            PrivateLobbyPlayerPermissions::MapModeOnly => 1,
-            PrivateLobbyPlayerPermissions::None => 2,
-        })
+        self.set_kv(
+            "+ns_private_match_only_host_can_change_settings",
+            match player_permissions {
+                PrivateLobbyPlayerPermissions::All => 0,
+                PrivateLobbyPlayerPermissions::MapModeOnly => 1,
+                PrivateLobbyPlayerPermissions::None => 2,
+            },
+        )
     }
 
     pub fn set_only_host_can_start(self, only_host_can_start: bool) -> Self {
@@ -175,7 +180,10 @@ impl ArgBuilder {
     }
 
     pub fn set_countdown_length_seconds(self, countdown_length_seconds: u32) -> Self {
-        self.set_kv("+ns_private_match_countdown_length", countdown_length_seconds)
+        self.set_kv(
+            "+ns_private_match_countdown_length",
+            countdown_length_seconds,
+        )
     }
 
     pub fn set_graphics_mode(self, graphics_mode: GraphicsMode) -> Self {
@@ -204,25 +212,63 @@ impl ArgBuilder {
 
     pub fn set_playlist_overrides(self, playlist_overrides: PlaylistOverrides) -> Self {
         fn riff_value(exists: bool) -> Option<bool> {
-            if exists { Some(true) } else { None }
+            if exists {
+                Some(true)
+            } else {
+                None
+            }
         }
 
         self
-
             // Riffs
-            .set_playlist_var("riff_floorislava", riff_value(playlist_overrides.riffs.contains(&Riff::FloorIsLava)))
-            .set_playlist_var("featured_mode_all_holopilot", riff_value(playlist_overrides.riffs.contains(&Riff::AllHolopilot)))
-            .set_playlist_var("featured_mode_all_grapple", riff_value(playlist_overrides.riffs.contains(&Riff::AllGrapple)))
-            .set_playlist_var("featured_mode_all_phase", riff_value(playlist_overrides.riffs.contains(&Riff::AllPhase)))
-            .set_playlist_var("featured_mode_all_ticks", riff_value(playlist_overrides.riffs.contains(&Riff::AllTicks)))
-            .set_playlist_var("featured_mode_tactikill", riff_value(playlist_overrides.riffs.contains(&Riff::Tactikill)))
-            .set_playlist_var("featured_mode_amped_tacticals", riff_value(playlist_overrides.riffs.contains(&Riff::AmpedTacticals)))
-            .set_playlist_var("featured_mode_rocket_arena", riff_value(playlist_overrides.riffs.contains(&Riff::RocketArena)))
-            .set_playlist_var("featured_mode_shotguns_snipers", riff_value(playlist_overrides.riffs.contains(&Riff::ShotgunsSnipers)))
-            .set_playlist_var("iron_rules", riff_value(playlist_overrides.riffs.contains(&Riff::IronRules)))
-            .set_playlist_var("fp_embark_enabled", riff_value(playlist_overrides.riffs.contains(&Riff::FirstPersonEmbark)))
-            .set_playlist_var("riff_instagib", riff_value(playlist_overrides.riffs.contains(&Riff::Instagib)))
-
+            .set_playlist_var(
+                "riff_floorislava",
+                riff_value(playlist_overrides.riffs.contains(&Riff::FloorIsLava)),
+            )
+            .set_playlist_var(
+                "featured_mode_all_holopilot",
+                riff_value(playlist_overrides.riffs.contains(&Riff::AllHolopilot)),
+            )
+            .set_playlist_var(
+                "featured_mode_all_grapple",
+                riff_value(playlist_overrides.riffs.contains(&Riff::AllGrapple)),
+            )
+            .set_playlist_var(
+                "featured_mode_all_phase",
+                riff_value(playlist_overrides.riffs.contains(&Riff::AllPhase)),
+            )
+            .set_playlist_var(
+                "featured_mode_all_ticks",
+                riff_value(playlist_overrides.riffs.contains(&Riff::AllTicks)),
+            )
+            .set_playlist_var(
+                "featured_mode_tactikill",
+                riff_value(playlist_overrides.riffs.contains(&Riff::Tactikill)),
+            )
+            .set_playlist_var(
+                "featured_mode_amped_tacticals",
+                riff_value(playlist_overrides.riffs.contains(&Riff::AmpedTacticals)),
+            )
+            .set_playlist_var(
+                "featured_mode_rocket_arena",
+                riff_value(playlist_overrides.riffs.contains(&Riff::RocketArena)),
+            )
+            .set_playlist_var(
+                "featured_mode_shotguns_snipers",
+                riff_value(playlist_overrides.riffs.contains(&Riff::ShotgunsSnipers)),
+            )
+            .set_playlist_var(
+                "iron_rules",
+                riff_value(playlist_overrides.riffs.contains(&Riff::IronRules)),
+            )
+            .set_playlist_var(
+                "fp_embark_enabled",
+                riff_value(playlist_overrides.riffs.contains(&Riff::FirstPersonEmbark)),
+            )
+            .set_playlist_var(
+                "riff_instagib",
+                riff_value(playlist_overrides.riffs.contains(&Riff::Instagib)),
+            )
             // Match
             .set_playlist_var("classic_mp", playlist_overrides.match_classic_mp_enabled)
             .set_playlist_var("run_epilogue", playlist_overrides.match_epilogue_enabled)
@@ -230,46 +276,111 @@ impl ArgBuilder {
             .set_playlist_var("roundscorelimit", playlist_overrides.match_round_scorelimit)
             .set_playlist_var("timelimit", playlist_overrides.match_timelimit)
             .set_playlist_var("roundtimelimit", playlist_overrides.match_round_timelimit)
-            .set_playlist_var("oob_timer_enabled", playlist_overrides.match_oob_timer_enabled)
+            .set_playlist_var(
+                "oob_timer_enabled",
+                playlist_overrides.match_oob_timer_enabled,
+            )
             .set_playlist_var("max_players", playlist_overrides.match_max_players)
-            .set_flag("-maxplayersplaylist", playlist_overrides.match_max_players.is_some())
-
+            .set_flag(
+                "-maxplayersplaylist",
+                playlist_overrides.match_max_players.is_some(),
+            )
             // Titan
-            .set_playlist_var("earn_meter_titan_multiplier", playlist_overrides.titan_boost_meter_multiplier)
-            .set_playlist_var("aegis_upgrades", playlist_overrides.titan_aegis_upgrades_enabled)
-            .set_playlist_var("infinite_doomed_state", playlist_overrides.titan_infinite_doomed_state_enabled)
-            .set_playlist_var("titan_shield_regen", playlist_overrides.titan_shield_regen_enabled)
-            .set_playlist_var("classic_rodeo", playlist_overrides.titan_classic_rodeo_enabled)
-
+            .set_playlist_var(
+                "earn_meter_titan_multiplier",
+                playlist_overrides.titan_boost_meter_multiplier,
+            )
+            .set_playlist_var(
+                "aegis_upgrades",
+                playlist_overrides.titan_aegis_upgrades_enabled,
+            )
+            .set_playlist_var(
+                "infinite_doomed_state",
+                playlist_overrides.titan_infinite_doomed_state_enabled,
+            )
+            .set_playlist_var(
+                "titan_shield_regen",
+                playlist_overrides.titan_shield_regen_enabled,
+            )
+            .set_playlist_var(
+                "classic_rodeo",
+                playlist_overrides.titan_classic_rodeo_enabled,
+            )
             // Pilot bleedout
-            .set_playlist_var("riff_player_bleedout", playlist_overrides.pilot_bleedout_mode.map(|value| match value {
-                PilotBleedout::Default => 0,
-                PilotBleedout::Disabled => 1,
-                PilotBleedout::Enabled => 2,
-            }))
-            .set_playlist_var("player_bleedout_forceHolster", playlist_overrides.pilot_bleedout_holster_when_down)
-            .set_playlist_var("player_bleedout_forceDeathOnTeamBleedout", playlist_overrides.pilot_bleedout_die_on_team_bleedout)
-            .set_playlist_var("player_bleedout_bleedoutTime", playlist_overrides.pilot_bleedout_bleedout_time)
-            .set_playlist_var("player_bleedout_firstAidTime", playlist_overrides.pilot_bleedout_firstaid_time)
-            .set_playlist_var("player_bleedout_firstAidTimeSelf", playlist_overrides.pilot_bleedout_selfres_time)
-            .set_playlist_var("player_bleedout_firstAidHealPercent", playlist_overrides.pilot_bleedout_firstaid_heal_percent)
-            .set_playlist_var("player_bleedout_aiBleedingPlayerMissChance", playlist_overrides.pilot_bleedout_down_ai_miss_chance)
-
+            .set_playlist_var(
+                "riff_player_bleedout",
+                playlist_overrides
+                    .pilot_bleedout_mode
+                    .map(|value| match value {
+                        PilotBleedout::Default => 0,
+                        PilotBleedout::Disabled => 1,
+                        PilotBleedout::Enabled => 2,
+                    }),
+            )
+            .set_playlist_var(
+                "player_bleedout_forceHolster",
+                playlist_overrides.pilot_bleedout_holster_when_down,
+            )
+            .set_playlist_var(
+                "player_bleedout_forceDeathOnTeamBleedout",
+                playlist_overrides.pilot_bleedout_die_on_team_bleedout,
+            )
+            .set_playlist_var(
+                "player_bleedout_bleedoutTime",
+                playlist_overrides.pilot_bleedout_bleedout_time,
+            )
+            .set_playlist_var(
+                "player_bleedout_firstAidTime",
+                playlist_overrides.pilot_bleedout_firstaid_time,
+            )
+            .set_playlist_var(
+                "player_bleedout_firstAidTimeSelf",
+                playlist_overrides.pilot_bleedout_selfres_time,
+            )
+            .set_playlist_var(
+                "player_bleedout_firstAidHealPercent",
+                playlist_overrides.pilot_bleedout_firstaid_heal_percent,
+            )
+            .set_playlist_var(
+                "player_bleedout_aiBleedingPlayerMissChance",
+                playlist_overrides.pilot_bleedout_down_ai_miss_chance,
+            )
             // Promode
             .set_playlist_var("promode_enable", playlist_overrides.promode_weapons_enabled)
-
             // Pilot
-            .set_playlist_var("pilot_health_multiplier", playlist_overrides.pilot_health_multiplier)
+            .set_playlist_var(
+                "pilot_health_multiplier",
+                playlist_overrides.pilot_health_multiplier,
+            )
             .set_playlist_var("respawn_delay", playlist_overrides.pilot_respawn_delay)
-            .set_playlist_var("boosts_enabled", playlist_overrides.pilot_boosts_enabled.map(|value| !value)) // backwards apparently?
-            .set_playlist_var("earn_meter_pilot_overdrive", playlist_overrides.pilot_boost_meter_overdrive.map(|value| match value {
-                BoostMeterOverdrive::Disabled => 0,
-                BoostMeterOverdrive::Enabled => 1,
-                BoostMeterOverdrive::Only => 2,
-            }))
-            .set_playlist_var("earn_meter_pilot_multiplier", playlist_overrides.pilot_boost_meter_multiplier)
-            .set_playlist_var("custom_air_accel_pilot", playlist_overrides.pilot_air_acceleration)
-            .set_playlist_var("no_pilot_collision", playlist_overrides.pilot_collision_enabled.map(|value| !value))
+            .set_playlist_var(
+                "boosts_enabled",
+                playlist_overrides.pilot_boosts_enabled.map(|value| !value),
+            ) // backwards apparently?
+            .set_playlist_var(
+                "earn_meter_pilot_overdrive",
+                playlist_overrides
+                    .pilot_boost_meter_overdrive
+                    .map(|value| match value {
+                        BoostMeterOverdrive::Disabled => 0,
+                        BoostMeterOverdrive::Enabled => 1,
+                        BoostMeterOverdrive::Only => 2,
+                    }),
+            )
+            .set_playlist_var(
+                "earn_meter_pilot_multiplier",
+                playlist_overrides.pilot_boost_meter_multiplier,
+            )
+            .set_playlist_var(
+                "custom_air_accel_pilot",
+                playlist_overrides.pilot_air_acceleration,
+            )
+            .set_playlist_var(
+                "no_pilot_collision",
+                playlist_overrides
+                    .pilot_collision_enabled
+                    .map(|value| !value),
+            )
     }
 
     pub fn add_extra_playlist_vars(mut self, playlist_vars: LinkedHashMap<String, String>) -> Self {
@@ -313,13 +424,32 @@ impl ArgBuilder {
     pub fn build(self, out_envs: &mut Vec<String>) {
         let mut extra_args = Vec::new();
         extra_args.extend(self.flag_args);
-        extra_args.extend(self.kv_args.into_iter().flat_map(|(key, value)| [key, value]));
+        extra_args.extend(
+            self.kv_args
+                .into_iter()
+                .flat_map(|(key, value)| [key, value]),
+        );
         extra_args.push("+setplaylistvaroverrides".to_string());
-        let playlist_args_list: Vec<_> = self.playlist_vars.into_iter().flat_map(|(key, value)| [key, value]).collect();
+        let playlist_args_list: Vec<_> = self
+            .playlist_vars
+            .into_iter()
+            .flat_map(|(key, value)| [key, value])
+            .collect();
         extra_args.push(playlist_args_list.join(" "));
 
         let mut env_args = self.kv_env_args;
-        env_args.insert("NS_EXTRA_ARGUMENTS".to_string(), extra_args.iter().map(|arg| format!("\"{}\"", arg)).collect::<Vec<_>>().join(" "));
-        out_envs.extend(env_args.into_iter().map(|(key, value)| format!("{}={}", key, value)));
+        env_args.insert(
+            "NS_EXTRA_ARGUMENTS".to_string(),
+            extra_args
+                .iter()
+                .map(|arg| format!("\"{}\"", arg))
+                .collect::<Vec<_>>()
+                .join(" "),
+        );
+        out_envs.extend(
+            env_args
+                .into_iter()
+                .map(|(key, value)| format!("{}={}", key, value)),
+        );
     }
 }
